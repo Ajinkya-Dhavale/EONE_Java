@@ -11,8 +11,12 @@ import org.springframework.context.ApplicationListener;
 public class EOneApplication implements ApplicationListener<WebServerInitializedEvent> {
 
     public static void main(String[] args) {
+
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Kolkata"));
         System.out.println("🚀 Starting Application...");
+
+        // seedQuery();
+
         SpringApplication.run(EOneApplication.class, args);
     }
 
