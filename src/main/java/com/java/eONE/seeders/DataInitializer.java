@@ -4,7 +4,10 @@ import com.java.eONE.model.Role;
 import com.java.eONE.model.User;
 import com.java.eONE.repository.RoleRepository;
 import com.java.eONE.repository.UserRepository;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -15,6 +18,9 @@ public class DataInitializer implements CommandLineRunner {
 
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
+
+     @Autowired
+    private PasswordEncoder passwordEncoder;
 
     public DataInitializer(RoleRepository roleRepository, UserRepository userRepository) {
         this.roleRepository = roleRepository;
@@ -63,7 +69,8 @@ public class DataInitializer implements CommandLineRunner {
             User adminUser = new User();
             adminUser.setEmail("admin@gmail.com");
             adminUser.setName("Admin");
-            adminUser.setPasswordDigest("admin@123"); // Hash in real app!
+            // adminUser.setPasswordDigest("admin@123"); // Hash in real app!
+            adminUser.setPasswordDigest(passwordEncoder.encode("admin123")); // Hash in real app!
             adminUser.setMobileNumber("960492407");
             adminUser.setStatus(1); // e.g., 1 for approved
             adminUser.setRole(admin);
