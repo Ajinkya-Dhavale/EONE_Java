@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -16,7 +17,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @CrossOrigin(origins = "*")
-@RequestMapping("/api/v1/classrooms")
+@RequestMapping(value = "/api/v1/classrooms", produces = "application/json")
 public class ClassroomController {
 
     private final ClassroomService classroomService;
@@ -74,7 +75,7 @@ public class ClassroomController {
         return ResponseEntity.ok(dtos);
     }
 
-    @PostMapping
+    @PostMapping(produces = "application/json", consumes = "application/json")
     public ResponseEntity<?> createClassroom(@RequestBody Classroom classroom) {
         try {
             classroom.setIsActive(true);
@@ -89,33 +90,41 @@ public class ClassroomController {
                             new ClassroomResponseDTO(
                                     saved.getId(),
                                     saved.getName(),
-                                    saved.getTeacher() != null ? saved.getTeacher().getName() : null, // ✅ teacher name
+                                    saved.getTeacher() != null ? saved.getTeacher().getName() : null,
                                     saved.getBatch(),
                                     saved.getYear()
                             )
                     ));
+        } catch (DataIntegrityViolationException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ApiError("Classroom name must be unique"));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                     .body(new ApiError(e.getMessage()));
         }
     }
 
-    @PutMapping("/{id}")
+    @PutMapping(value = "/{id}", produces = "application/json", consumes = "application/json")
     public ResponseEntity<?> updateClassroom(@PathVariable Long id, @RequestBody Classroom classroom) {
-        Classroom updated = classroomService.updateClassroom(id, classroom);
-        if (updated == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiError("Classroom not found"));
+        try {
+            Classroom updated = classroomService.updateClassroom(id, classroom);
+            if (updated == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiError("Classroom not found"));
+            }
+            return ResponseEntity.ok(new ApiResponse(
+                    "Classroom updated successfully",
+                    new ClassroomResponseDTO(
+                            updated.getId(),
+                            updated.getName(),
+                            updated.getTeacher() != null ? updated.getTeacher().getName() : null,
+                            updated.getBatch(),
+                            updated.getYear()
+                    )
+            ));
+        } catch (DataIntegrityViolationException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ApiError("Classroom name must be unique"));
         }
-        return ResponseEntity.ok(new ApiResponse(
-                "Classroom updated successfully",
-                new ClassroomResponseDTO(
-                        updated.getId(),
-                        updated.getName(),
-                        updated.getTeacher() != null ? updated.getTeacher().getName() : null,
-                        updated.getBatch(),
-                        updated.getYear()
-                )
-        ));
     }
 
     @DeleteMapping("/{id}")
@@ -136,11 +145,15 @@ public class ClassroomController {
             this.message = message;
             this.classroom = classroom;
         }
-        // getters + setters
+        public String getMessage() { return message; }
+        public void setMessage(String message) { this.message = message; }
+        public ClassroomResponseDTO getClassroom() { return classroom; }
+        public void setClassroom(ClassroomResponseDTO classroom) { this.classroom = classroom; }
     }
     static class ApiError {
         private String error;
         public ApiError(String error) { this.error = error; }
-        // getters + setters
+        public String getError() { return error; }
+        public void setError(String error) { this.error = error; }
     }
 }

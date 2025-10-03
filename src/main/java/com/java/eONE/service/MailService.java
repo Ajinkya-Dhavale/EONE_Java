@@ -7,6 +7,7 @@ import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,6 +16,7 @@ public class MailService {
     @Autowired
     private JavaMailSender mailSender;
 
+    @Async
     public void sendApprovalEmail(User user) {
         String subject = "Your Account Has Been Approved";
         String content = "<p>Dear " + user.getName() + ",</p>"
@@ -24,6 +26,7 @@ public class MailService {
         sendEmail(user.getEmail(), subject, content);
     }
 
+    @Async
     public void sendRejectionEmail(User user) {
         String subject = "Your Account Has Been Rejected";
         String content = "<p>Dear " + user.getName() + ",</p>"

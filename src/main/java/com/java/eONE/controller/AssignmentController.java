@@ -20,10 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.web.multipart.MultipartFile;
-import java.time.LocalDateTime;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-import java.util.*;
-import java.util.stream.Collectors;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,17 +30,20 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.*;
 
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping("/api/v1/assignments")
-
 public class AssignmentController {
 
     private final AssignmentRepository assignmentRepository;
     private final NotificationRepository notificationRepository;
     private final SubjectRepository subjectRepository;
     private final UserRepository userRepository;
+
+    @Autowired
+    private AssignmentSubmissionService submissionService;
 
     public AssignmentController(AssignmentRepository assignmentRepository,
                                 NotificationRepository notificationRepository,
@@ -64,7 +64,6 @@ public class AssignmentController {
             @RequestParam("teacher_id") Long teacherId,
             @RequestParam("file") MultipartFile file) {
 
-        // Validate related entities
         Optional<Subject> subjectOpt = subjectRepository.findById(subjectId);
         Optional<User> teacherOpt = userRepository.findById(teacherId);
 
@@ -73,12 +72,9 @@ public class AssignmentController {
                     .body(Map.of("error", "Invalid subject_id or teacher_id"));
         }
 
-        // Save file to uploads folder inside project
-        String uploadDir = "uploads"; // relative to project root
+        String uploadDir = "uploads";
         File directory = new File(uploadDir);
-        if (!directory.exists()) {
-            directory.mkdirs();
-        }
+        if (!directory.exists()) directory.mkdirs();
 
         String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
         Path filePath = Paths.get(uploadDir, fileName);
@@ -89,12 +85,11 @@ public class AssignmentController {
                     .body(Map.of("error", "File upload failed"));
         }
 
-        // Save assignment in DB
         Assignment assignment = new Assignment();
         assignment.setTitle(title);
         assignment.setDescription(description);
         assignment.setDueDate(dueDate);
-        assignment.setFile(fileName); // store only filename
+        assignment.setFile(fileName);
         assignment.setSubject(subjectOpt.get());
         assignment.setTeacher(teacherOpt.get());
         assignment.setCreatedAt(LocalDateTime.now());
@@ -102,11 +97,11 @@ public class AssignmentController {
 
         Assignment saved = assignmentRepository.save(assignment);
 
-        // Create notification
         Notification notification = new Notification();
         notification.setTeacher(teacherOpt.get());
         notification.setAssignment(saved);
-        notification.setMessage(teacherOpt.get().getName() + " has submitted a new assignment: " + saved.getTitle());
+        notification.setMessage(teacherOpt.get().getName() +
+                " has submitted a new assignment: " + saved.getTitle());
         notification.setCreatedAt(LocalDateTime.now());
         notification.setUpdatedAt(LocalDateTime.now());
         notificationRepository.save(notification);
@@ -114,7 +109,6 @@ public class AssignmentController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(Map.of("message", "Assignment created successfully", "assignment", saved));
     }
-
 
     @GetMapping
     public ResponseEntity<?> getAssignments(
@@ -125,8 +119,7 @@ public class AssignmentController {
 
         if (teacher_id != null) {
             assignments = assignmentRepository.findByTeacherId(teacher_id);
-        } 
-        else if (student_id != null) {
+        } else if (student_id != null) {
             Optional<User> studentOpt = userRepository.findById(student_id);
             if (studentOpt.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -139,16 +132,14 @@ public class AssignmentController {
             }
 
             List<Long> subjectIds = classroom.getSubjects().stream()
-                    .map(sub -> sub.getId())
+                    .map(Subject::getId)
                     .toList();
             assignments = assignmentRepository.findBySubjectIdIn(subjectIds);
-        } 
-        else {
+        } else {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "teacher_id or student_id parameter required"));
         }
 
-        // Convert Assignment -> Map<String, Object> for Flutter
         List<Map<String, Object>> dtos = assignments.stream().map(a -> {
             Map<String, Object> map = new HashMap<>();
             map.put("id", a.getId());
@@ -159,6 +150,7 @@ public class AssignmentController {
             map.put("subject_name", a.getSubject() != null ? a.getSubject().getName() : null);
             map.put("teacher_id", a.getTeacher() != null ? a.getTeacher().getId() : null);
             map.put("teacher_name", a.getTeacher() != null ? a.getTeacher().getName() : null);
+
             String fileUrl = null;
             if (a.getFile() != null && !a.getFile().isEmpty()) {
                 fileUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
@@ -173,36 +165,108 @@ public class AssignmentController {
         return ResponseEntity.ok(dtos);
     }
 
-
     @GetMapping("/{id}/submissions")
     public ResponseEntity<?> getSubmissions(@PathVariable Long id) {
         List<ViewSubmittedAssignmentDTO> submissions = submissionService.getSubmissionsByAssignment(id);
-
         if (submissions.isEmpty()) {
-            return ResponseEntity.ok().body(List.of()); // Return empty list instead of 400
+            return ResponseEntity.ok(List.of());
         }
         return ResponseEntity.ok(submissions);
     }
-  
-    @PatchMapping("/{submissionId}")
-    public ResponseEntity<?> submitMarks(
+
+    @PatchMapping("/submissions/{submissionId}/grade")
+    public ResponseEntity<?> gradeSubmission(
             @PathVariable Long submissionId,
-            @RequestBody Map<String, Object> payload
-    ) {
-        Integer marks = (Integer) payload.get("marks");
+            @RequestBody Map<String, Object> payload) {
+
+        Integer marks = (payload.get("marks") instanceof Number)
+                ? ((Number) payload.get("marks")).intValue() : null;
         String grade = (String) payload.get("grade");
         boolean success = submissionService.submitMarks(submissionId, marks, grade);
 
-        if(success) {
+        if (success) {
             return ResponseEntity.ok(Map.of("message", "Marks submitted successfully"));
         } else {
-            return ResponseEntity.badRequest().body(Map.of("error", "Submission not found"));
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Submission not found"));
         }
     }
 
-    @Autowired
-    private AssignmentSubmissionService submissionService;
-    
+    @PatchMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> updateAssignment(
+            @PathVariable Long id,
+            @RequestParam(required = false) String title,
+            @RequestParam(required = false) String description,
+            @RequestParam(name = "due_date", required = false)
+            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate dueDate,
+            @RequestParam(name = "file", required = false) MultipartFile file) {
+
+        Optional<Assignment> opt = assignmentRepository.findById(id);
+        if (opt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Assignment not found"));
+        }
+
+        Assignment assignment = opt.get();
+
+        if (assignment.getDueDate() != null && assignment.getDueDate().isBefore(LocalDate.now())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "Cannot edit after due date"));
+        }
+
+        if (submissionService.hasAnyGradedSubmission(id)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "Cannot edit after grading started"));
+        }
+
+        if (title != null) assignment.setTitle(title);
+        if (description != null) assignment.setDescription(description);
+        if (dueDate != null) assignment.setDueDate(dueDate);
+
+        if (file != null && !file.isEmpty()) {
+            String uploadDir = "uploads";
+            File directory = new File(uploadDir);
+            if (!directory.exists()) directory.mkdirs();
+
+            String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+            Path filePath = Paths.get(uploadDir, fileName);
+            try {
+                Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException e) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(Map.of("error", "File upload failed"));
+            }
+            assignment.setFile(fileName);
+        }
+
+        assignment.setUpdatedAt(LocalDateTime.now());
+        Assignment saved = assignmentRepository.save(assignment);
+        return ResponseEntity.ok(Map.of("message", "Assignment updated", "assignment", saved));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteAssignment(@PathVariable Long id) {
+        Optional<Assignment> opt = assignmentRepository.findById(id);
+        if (opt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Assignment not found"));
+        }
+
+        Assignment assignment = opt.get();
+        if (assignment.getDueDate() != null && assignment.getDueDate().isBefore(LocalDate.now())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "Cannot delete after due date"));
+        }
+
+        if (submissionService.hasAnySubmission(id)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "Cannot delete with submissions"));
+        }
+
+        assignmentRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Assignment deleted"));
+    }
+
     private AssignmentResponseDTO mapToResponseDTO(Assignment assignment) {
         AssignmentResponseDTO dto = new AssignmentResponseDTO();
         dto.setId(assignment.getId());
@@ -214,11 +278,15 @@ public class AssignmentController {
         dto.setTeacherId(assignment.getTeacher() != null ? assignment.getTeacher().getId() : null);
         dto.setCreatedAt(assignment.getCreatedAt());
         dto.setUpdatedAt(assignment.getUpdatedAt());
-        String url = ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path("/uploads/")
-                .path(assignment.getFile())
-                .toUriString();
-        dto.setFileUrl(url);
+
+        if (assignment.getFile() != null) {
+            String url = ServletUriComponentsBuilder.fromCurrentContextPath()
+                    .path("/uploads/")
+                    .path(assignment.getFile())
+                    .toUriString();
+            dto.setFileUrl(url);
+        }
+
         return dto;
     }
 }

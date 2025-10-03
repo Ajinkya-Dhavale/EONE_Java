@@ -15,4 +15,8 @@ public interface AssignmentSubmissionService {
     
     boolean submitMarks(Long submissionId, Integer marks, String grade);
 
+    // Constraints helpers
+    boolean hasAnySubmission(Long assignmentId);
+    boolean hasAnyGradedSubmission(Long assignmentId);
+
 }

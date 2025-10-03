@@ -76,7 +76,15 @@ public class UserService {
     }
 
     public List<UserResponseDTO> getPendingApprovals(String type, Long teacherId) {
-        Role role = roleRepository.findByName(type);
+        // Handle case sensitivity - convert to proper case
+        String roleName = type.toLowerCase();
+        if ("teacher".equals(roleName)) {
+            roleName = "Teacher";
+        } else if ("student".equals(roleName)) {
+            roleName = "Student";
+        }
+        
+        Role role = roleRepository.findByName(roleName);
         if (role == null) return List.of();
 
         if ("student".equalsIgnoreCase(type) && teacherId != null) {
@@ -92,7 +100,15 @@ public class UserService {
     }
 
     public List<UserResponseDTO> getApprovedUsers(String type, Long teacherId) {
-        Role role = roleRepository.findByName(type);
+        // Handle case sensitivity - convert to proper case
+        String roleName = type.toLowerCase();
+        if ("teacher".equals(roleName)) {
+            roleName = "Teacher";
+        } else if ("student".equals(roleName)) {
+            roleName = "Student";
+        }
+        
+        Role role = roleRepository.findByName(roleName);
         if (role == null) return List.of();
 
         if ("teacher".equalsIgnoreCase(type) && teacherId != null) {
@@ -134,7 +150,7 @@ public class UserService {
     }
 
     public long getPendingApprovalsCount() {
-        List<Long> roleIds = roleRepository.findByNameIn(List.of("teacher", "company"))
+        List<Long> roleIds = roleRepository.findByNameIn(List.of("Teacher", "Company"))
                 .stream().map(Role::getId).collect(Collectors.toList());
         return userRepository.countByStatusAndRoleIdIn(0, roleIds);
     }

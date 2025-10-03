@@ -59,7 +59,17 @@ public class AssignmentSubmissionServiceImpl implements AssignmentSubmissionServ
             dto.setUserId(s.getUser().getId());
             dto.setStudentName(s.getUser().getName());
             dto.setFile(s.getFile());
-            dto.setFileUrl(s.getFileUrl());
+            
+            // Generate proper file URL using ServletUriComponentsBuilder
+            String fileUrl = null;
+            if (s.getFile() != null && !s.getFile().isEmpty()) {
+                fileUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath()
+                        .path("/submissionFile/")
+                        .path(s.getFile())
+                        .toUriString();
+            }
+            dto.setFileUrl(fileUrl);
+            
             dto.setCreatedAt(s.getCreatedAt());
             dto.setMarks(s.getMarks());
             dto.setGrade(s.getGrade());
@@ -78,5 +88,16 @@ public class AssignmentSubmissionServiceImpl implements AssignmentSubmissionServ
         submission.setGrade(grade);
         submissionRepository.save(submission);
         return true;
+    }
+
+    @Override
+    public boolean hasAnySubmission(Long assignmentId) {
+        return !submissionRepository.findByAssignmentId(assignmentId).isEmpty();
+    }
+
+    @Override
+    public boolean hasAnyGradedSubmission(Long assignmentId) {
+        return submissionRepository.findByAssignmentId(assignmentId)
+                .stream().anyMatch(s -> s.getMarks() != null || (s.getGrade() != null && !s.getGrade().isEmpty()));
     }
 }

@@ -17,7 +17,7 @@ public class Classroom {
     private Long id;
 
     @NotBlank(message = "Name is mandatory")
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String name;
 
     @ManyToOne

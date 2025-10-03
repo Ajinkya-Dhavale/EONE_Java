@@ -14,11 +14,11 @@ import org.springframework.stereotype.Repository;
 public interface UserRepository extends JpaRepository<User, Long> {
 	 Optional<User> findByEmail(String email);
 	 
-	 @Query("SELECT u FROM User u WHERE u.role.id = ?1 AND u.classroom.id = ?2 AND u.status = ?3 AND u.role.name <> 'admin'")
+	 @Query("SELECT u FROM User u WHERE u.role.id = ?1 AND u.classroom.id = ?2 AND u.status = ?3 AND u.role.name <> 'ADMIN'")
 	    List<User> findByRoleClassroomStatusExcludingAdmin(Long roleId, Long classroomId, Integer status);
 
 	    // Find by role id and status, exclude admins
-	    @Query("SELECT u FROM User u WHERE u.role.id = ?1 AND u.status = ?2 AND u.role.name <> 'admin'")
+	    @Query("SELECT u FROM User u WHERE u.role.id = ?1 AND u.status = ?2 AND u.role.name <> 'ADMIN'")
 	    List<User> findByRoleAndStatusExcludingAdmin(Long roleId, Integer status);
 
 	    // Count by status and roles in list
