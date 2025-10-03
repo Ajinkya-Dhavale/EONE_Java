@@ -5,6 +5,7 @@ import com.java.eONE.model.AssignmentSubmission;
 import com.java.eONE.repository.AssignmentSubmissionRepository;
 import com.java.eONE.service.AssignmentSubmissionService;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.util.List;
 import java.util.Optional;
@@ -60,10 +61,10 @@ public class AssignmentSubmissionServiceImpl implements AssignmentSubmissionServ
             dto.setStudentName(s.getUser().getName());
             dto.setFile(s.getFile());
             
-            // Generate proper file URL using ServletUriComponentsBuilder
+            // Generate proper file URL similar to how teacher assignments work
             String fileUrl = null;
             if (s.getFile() != null && !s.getFile().isEmpty()) {
-                fileUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath()
+                fileUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
                         .path("/submissionFile/")
                         .path(s.getFile())
                         .toUriString();

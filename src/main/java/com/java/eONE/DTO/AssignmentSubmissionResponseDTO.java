@@ -1,24 +1,38 @@
 package com.java.eONE.DTO;
 
-
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 
 public class AssignmentSubmissionResponseDTO {
 
     private Long id;
+    
+    @JsonProperty("assignment_id")
     private Long assignmentId;
+    
+    @JsonProperty("assignment_title")
+    private String assignmentTitle;
+    
+    @JsonProperty("user_id")
     private Long userId;
+    
     private String file;
+    
+    @JsonProperty("created_at")
     private LocalDateTime createdAt;
+    
+    @JsonProperty("updated_at")
     private LocalDateTime updatedAt;
+    
     private Integer marks;
     private String grade;
+    
+    @JsonProperty("file_url")
     private String fileUrl; // computed field
 
     // Default constructor
     public AssignmentSubmissionResponseDTO() {
     }
-
     // Parameterized constructor
     public AssignmentSubmissionResponseDTO(Long id, Long assignmentId, Long userId, String file, LocalDateTime createdAt, LocalDateTime updatedAt, Integer marks, String grade, String fileUrl) {
         this.id = id;
@@ -48,6 +62,14 @@ public class AssignmentSubmissionResponseDTO {
 
     public void setAssignmentId(Long assignmentId) {
         this.assignmentId = assignmentId;
+    }
+
+    public String getAssignmentTitle() {
+        return assignmentTitle;
+    }
+
+    public void setAssignmentTitle(String assignmentTitle) {
+        this.assignmentTitle = assignmentTitle;
     }
 
     public Long getUserId() {

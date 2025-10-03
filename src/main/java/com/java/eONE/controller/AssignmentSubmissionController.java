@@ -92,6 +92,7 @@ public class AssignmentSubmissionController {
         AssignmentSubmissionResponseDTO responseDTO = new AssignmentSubmissionResponseDTO();
         responseDTO.setId(savedSubmission.getId());
         responseDTO.setAssignmentId(savedSubmission.getAssignment().getId());
+        responseDTO.setAssignmentTitle(savedSubmission.getAssignment().getTitle()); // Add assignment title
         responseDTO.setUserId(savedSubmission.getUser().getId());
         responseDTO.setFile(savedSubmission.getFile());
         responseDTO.setCreatedAt(savedSubmission.getCreatedAt());
@@ -134,6 +135,7 @@ public class AssignmentSubmissionController {
                     AssignmentSubmissionResponseDTO dto = new AssignmentSubmissionResponseDTO();
                     dto.setId(sub.getId());
                     dto.setAssignmentId(sub.getAssignment().getId());
+                    dto.setAssignmentTitle(sub.getAssignment().getTitle()); // Add assignment title
                     dto.setUserId(sub.getUser().getId());
                     dto.setFile(sub.getFile());
                     dto.setCreatedAt(sub.getCreatedAt());
@@ -141,14 +143,15 @@ public class AssignmentSubmissionController {
                     dto.setMarks(sub.getMarks());
                     dto.setGrade(sub.getGrade());
                     
-                    // Add assignment title
-                    dto.setAssignmentTitle(sub.getAssignment().getTitle());
-                    
-                    String url = ServletUriComponentsBuilder.fromCurrentContextPath()
-                            .path("/submissionFile/")
-                            .path(sub.getFile())
-                            .toUriString();
-                    dto.setFileUrl(url);
+                    // Generate proper file URL similar to how teacher assignments work
+                    String fileUrl = null;
+                    if (sub.getFile() != null && !sub.getFile().isEmpty()) {
+                        fileUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
+                                .path("/submissionFile/")
+                                .path(sub.getFile())
+                                .toUriString();
+                    }
+                    dto.setFileUrl(fileUrl);
                     return dto;
                 }).collect(Collectors.toList());
 

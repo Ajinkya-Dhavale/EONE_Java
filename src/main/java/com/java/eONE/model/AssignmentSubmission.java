@@ -113,13 +113,9 @@ public class AssignmentSubmission {
     }
 
     // Helper method to get file URL (similar to Rails' file_url)
-    // Note: This method is deprecated. Use ServletUriComponentsBuilder in service layer instead.
     public String getFileUrl() {
         if (file != null && !file.isEmpty()) {
-            return org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath()
-                    .path("/submissionFile/")
-                    .path(file)
-                    .toUriString();
+            return "http://localhost:8080/submissionFile/" + file;
         }
         return null;
     }
