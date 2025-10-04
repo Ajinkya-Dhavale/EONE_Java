@@ -11,7 +11,12 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     List<Notification> findByTeacherIdOrderByCreatedAtDesc(Long teacherId);
 
-    List<Notification> findByAssignmentIdInAndUserIsNullOrderByCreatedAtDesc(List<Long> assignmentIds);
+    // For students: get assignment notifications (teacher uploads) where user is null and teacher is not null
+    List<Notification> findByAssignmentIdInAndUserIsNullAndTeacherIsNotNullOrderByCreatedAtDesc(List<Long> assignmentIds);
 
-    List<Notification> findByAssignmentIdInAndTeacherIsNullOrderByCreatedAtDesc(List<Long> assignmentIds);
+    // For teachers: get submission notifications where teacher is null and user is not null
+    List<Notification> findByAssignmentIdInAndTeacherIsNullAndUserIsNotNullOrderByCreatedAtDesc(List<Long> assignmentIds);
+    
+    // For students: get personal notifications (grading notifications)
+    List<Notification> findByUserIdOrderByCreatedAtDesc(Long userId);
 }

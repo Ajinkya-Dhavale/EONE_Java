@@ -185,6 +185,21 @@ public class AssignmentController {
         boolean success = submissionService.submitMarks(submissionId, marks, grade);
 
         if (success) {
+            // Create notification for student about grading
+            var submissionOpt = submissionService.getSubmissionById(submissionId);
+            if (submissionOpt.isPresent()) {
+                var submission = submissionOpt.get();
+                Notification notification = new Notification();
+                notification.setUser(submission.getUser()); // Student who submitted
+                notification.setAssignment(submission.getAssignment());
+                notification.setMessage("Your assignment '" + submission.getAssignment().getTitle() + 
+                    "' has been graded. Marks: " + (marks != null ? marks : "N/A") + 
+                    (grade != null && !grade.isEmpty() ? ", Grade: " + grade : ""));
+                notification.setCreatedAt(LocalDateTime.now());
+                notification.setUpdatedAt(LocalDateTime.now());
+                notificationRepository.save(notification);
+            }
+            
             return ResponseEntity.ok(Map.of("message", "Marks submitted successfully"));
         } else {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)

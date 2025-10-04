@@ -118,6 +118,18 @@ public class AssignmentSubmissionController {
         Integer marks = (payload.get("marks") instanceof Number) ? ((Number) payload.get("marks")).intValue() : null;
         String grade = (String) payload.get("grade");
         AssignmentSubmission updatedSubmission = submissionService.updateMarksAndGrade(id, marks, grade);
+        
+        // Create notification for student about grading
+        Notification notification = new Notification();
+        notification.setUser(updatedSubmission.getUser()); // Student who submitted
+        notification.setAssignment(updatedSubmission.getAssignment());
+        notification.setMessage("Your assignment '" + updatedSubmission.getAssignment().getTitle() + 
+            "' has been graded. Marks: " + (marks != null ? marks : "N/A") + 
+            (grade != null && !grade.isEmpty() ? ", Grade: " + grade : ""));
+        notification.setCreatedAt(LocalDateTime.now());
+        notification.setUpdatedAt(LocalDateTime.now());
+        notificationRepository.save(notification);
+        
         return ResponseEntity.ok(Map.of("message", "Marks updated successfully", "submission", updatedSubmission));
     }
 
