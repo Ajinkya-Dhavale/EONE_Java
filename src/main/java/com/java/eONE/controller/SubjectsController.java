@@ -71,4 +71,33 @@ public class SubjectsController {
         return ResponseEntity.ok(subjectsDto);
     }
 
+    @GetMapping("/classroom/{classroomId}")
+    public ResponseEntity<?> getSubjectsByClassroom(@PathVariable Long classroomId) {
+        try {
+            List<SubjectDTO> subjectsDto = subjectService.getSubjectsByClassroomId(classroomId);
+            return ResponseEntity.ok(subjectsDto);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", "Failed to fetch subjects: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/student/{studentId}")
+    public ResponseEntity<?> getSubjectsByStudent(@PathVariable Long studentId) {
+        try {
+            User student = userRepository.findById(studentId).orElse(null);
+            if (student == null) {
+                return ResponseEntity.status(404).body(Map.of("error", "Student not found"));
+            }
+            
+            if (student.getClassroom() == null) {
+                return ResponseEntity.ok(List.of()); // Return empty list if no classroom
+            }
+            
+            List<SubjectDTO> subjectsDto = subjectService.getSubjectsByClassroomId(student.getClassroom().getId());
+            return ResponseEntity.ok(subjectsDto);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", "Failed to fetch subjects: " + e.getMessage()));
+        }
+    }
+
 }

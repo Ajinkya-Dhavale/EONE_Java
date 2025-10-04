@@ -35,6 +35,11 @@ public class SubjectService {
         return subjects.stream().map(this::toDTO).collect(Collectors.toList());
     }
 
+    public List<SubjectDTO> getSubjectsByClassroomId(Long classroomId) {
+        List<Subject> subjects = subjectRepository.findByClassroomId(classroomId);
+        return subjects.stream().map(this::toDTO).collect(Collectors.toList());
+    }
+
     // Convert Subject entity to SubjectDTO
     public SubjectDTO toDTO(Subject subject) {
         return new SubjectDTO(

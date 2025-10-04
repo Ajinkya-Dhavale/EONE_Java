@@ -97,14 +97,29 @@ public class AssignmentController {
 
         Assignment saved = assignmentRepository.save(assignment);
 
-        Notification notification = new Notification();
-        notification.setTeacher(teacherOpt.get());
-        notification.setAssignment(saved);
-        notification.setMessage(teacherOpt.get().getName() +
-                " has submitted a new assignment: " + saved.getTitle());
-        notification.setCreatedAt(LocalDateTime.now());
-        notification.setUpdatedAt(LocalDateTime.now());
-        notificationRepository.save(notification);
+        // REMOVED: Teacher notification for assignment creation
+        // Assignment creation notifications should only go to students
+
+        // Create notifications for all students in the classroom
+        var subject = subjectOpt.get();
+        var classroom = subject.getClassroom();
+        if (classroom != null) {
+            // Get all students in the classroom
+            var students = userRepository.findByClassroomIdAndRoleName(classroom.getId(), "Student");
+            
+            for (User student : students) {
+                Notification studentNotification = new Notification();
+                studentNotification.setUser(student); // Set student as the recipient
+                studentNotification.setTeacher(null); // Ensure teacher is null for student notification
+                studentNotification.setAssignment(saved);
+                studentNotification.setMessage("New assignment created by " + teacherOpt.get().getName() + 
+                    ": " + saved.getTitle() + ". Due date: " + saved.getDueDate() + 
+                    ". Complete it before the due date!");
+                studentNotification.setCreatedAt(LocalDateTime.now());
+                studentNotification.setUpdatedAt(LocalDateTime.now());
+                notificationRepository.save(studentNotification);
+            }
+        }
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(Map.of("message", "Assignment created successfully", "assignment", saved));
@@ -191,6 +206,7 @@ public class AssignmentController {
                 var submission = submissionOpt.get();
                 Notification notification = new Notification();
                 notification.setUser(submission.getUser()); // Student who submitted
+                notification.setTeacher(null); // Ensure teacher is null for student notification
                 notification.setAssignment(submission.getAssignment());
                 notification.setMessage("Your assignment '" + submission.getAssignment().getTitle() + 
                     "' has been graded. Marks: " + (marks != null ? marks : "N/A") + 

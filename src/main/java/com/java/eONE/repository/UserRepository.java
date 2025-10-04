@@ -38,4 +38,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	            "AND u.status = :status")
 	     long countStudentsByTeacherIdAndStatus(@Param("teacherId") Long teacherId,
 	                                            @Param("status") int status);
+	    
+	    // Find students by classroom ID and role name
+	    @Query("SELECT u FROM User u WHERE u.classroom.id = :classroomId AND u.role.name = :roleName")
+	    List<User> findByClassroomIdAndRoleName(@Param("classroomId") Long classroomId, 
+	                                           @Param("roleName") String roleName);
 }

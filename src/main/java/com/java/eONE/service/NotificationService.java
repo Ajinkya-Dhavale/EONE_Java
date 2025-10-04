@@ -24,7 +24,7 @@ public class NotificationService {
     @Autowired
     private AssignmentRepository assignmentRepository;
 
-    private static final String STUDENT_ROLE_NAME = "STUDENT";
+    private static final String STUDENT_ROLE_NAME = "Student";
 
     public List<NotificationMessageDTO> getUserNotifications(Long userId, Integer limit) {
         User user = userRepository.findById(userId).orElse(null);
@@ -37,45 +37,17 @@ public class NotificationService {
         List<Notification> notifications;
 
         if (STUDENT_ROLE_NAME.equals(user.getRole().getName())) {
-            // For students, get notifications in two categories:
-            // 1. Assignment notifications for their classroom subjects (teacher uploads)
-            // 2. Personal notifications (grading notifications)
-            var classroom = user.getClassroom();
-            if (classroom != null) {
-                var subjectIds = classroom.getSubjects().stream()
-                                         .map(s -> s.getId())
-                                         .collect(Collectors.toList());
-                var assignmentIds = assignmentRepository.findBySubjectIdIn(subjectIds)
-                                                        .stream().map(a -> a.getId())
-                                                        .collect(Collectors.toList());
-
-                // Get assignment notifications (teacher uploads) and personal notifications (grading)
-                var assignmentNotifications = notificationRepository.findByAssignmentIdInAndUserIsNullAndTeacherIsNotNullOrderByCreatedAtDesc(assignmentIds);
-                var personalNotifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
-                
-                System.out.println("Found " + assignmentNotifications.size() + " assignment notifications");
-                System.out.println("Found " + personalNotifications.size() + " personal notifications");
-                
-                // Combine both lists
-                notifications = new java.util.ArrayList<>();
-                notifications.addAll(assignmentNotifications);
-                notifications.addAll(personalNotifications);
-                
-                // Sort by created date descending
-                notifications.sort((n1, n2) -> n2.getCreatedAt().compareTo(n1.getCreatedAt()));
-                
-                System.out.println("Total notifications for student: " + notifications.size());
-            } else {
-                // If no classroom, only get personal notifications
-                notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
-            }
+            // For students, get ONLY their personal notifications (where user_id = studentId)
+            // This includes assignment creation notifications and grading notifications
+            notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
+            
+            System.out.println("Found " + notifications.size() + " personal notifications for student: " + user.getName());
         } else {
-            // For teachers, get submission notifications
-            var assignmentIds = assignmentRepository.findByTeacherId(user.getId())
-                                                    .stream().map(a -> a.getId())
-                                                    .collect(Collectors.toList());
-
-            notifications = notificationRepository.findByAssignmentIdInAndTeacherIsNullAndUserIsNotNullOrderByCreatedAtDesc(assignmentIds);
+            // For teachers, get ONLY teacher notifications (where teacher_id = teacherId)
+            // This includes student submission notifications
+            notifications = notificationRepository.findByTeacherIdOrderByCreatedAtDesc(userId);
+            
+            System.out.println("Found " + notifications.size() + " teacher notifications for teacher: " + user.getName());
         }
 
         if (limit != null && notifications.size() > limit) {

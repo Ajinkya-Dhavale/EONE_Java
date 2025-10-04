@@ -81,8 +81,9 @@ public class AssignmentSubmissionController {
 
         AssignmentSubmission savedSubmission = submissionService.saveSubmission(submission);
 
+        // Create notification for teacher about student submission
         Notification notification = new Notification();
-        notification.setUser(user);
+        notification.setTeacher(assignment.getTeacher()); // Set teacher as recipient
         notification.setAssignment(assignment);
         notification.setMessage(user.getName() + " has completed an assignment: " + assignment.getTitle() + ". Please review it.");
         notification.setCreatedAt(LocalDateTime.now());
@@ -122,6 +123,7 @@ public class AssignmentSubmissionController {
         // Create notification for student about grading
         Notification notification = new Notification();
         notification.setUser(updatedSubmission.getUser()); // Student who submitted
+        notification.setTeacher(null); // Ensure teacher is null for student notification
         notification.setAssignment(updatedSubmission.getAssignment());
         notification.setMessage("Your assignment '" + updatedSubmission.getAssignment().getTitle() + 
             "' has been graded. Marks: " + (marks != null ? marks : "N/A") + 

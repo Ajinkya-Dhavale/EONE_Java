@@ -8,5 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface SubjectRepository extends JpaRepository<Subject, Long> {
 	   List<Subject> findByTeacherId(Long teacherId);
+	   List<Subject> findByClassroomId(Long classroomId);
 	   long countByTeacherId(Long teacherId);
 }
