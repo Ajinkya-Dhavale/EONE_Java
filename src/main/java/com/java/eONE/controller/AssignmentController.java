@@ -1,5 +1,7 @@
 package com.java.eONE.controller;
 
+import com.java.eONE.enums.RoleType;
+
 import com.java.eONE.DTO.AssignmentRequestDTO;
 import com.java.eONE.DTO.AssignmentResponseDTO;
 import com.java.eONE.DTO.ViewSubmittedAssignmentDTO;
@@ -105,7 +107,7 @@ public class AssignmentController {
         var classroom = subject.getClassroom();
         if (classroom != null) {
             // Get all students in the classroom
-            var students = userRepository.findByClassroomIdAndRoleName(classroom.getId(), "Student");
+            var students = userRepository.findByClassroomIdAndRoleName(classroom.getId(), RoleType.STUDENT.getCode());
             
             for (User student : students) {
                 Notification studentNotification = new Notification();

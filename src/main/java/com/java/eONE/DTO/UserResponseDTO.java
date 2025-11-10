@@ -19,13 +19,15 @@ public class UserResponseDTO {
     private Long classroomId;
     private String token; // nullable
     private String avatarUrl;
+    @JsonProperty("teacher_type")
+    private String teacherType;
 
     // No-arg constructor
     public UserResponseDTO() {}
 
     // All-args constructor
     public UserResponseDTO(Long id, String email, String name, String mobileNumber, Integer status, LocalDate dateOfBirth,
-                           String role, String classroom, Long classroomId, String token, String avatarUrl) {
+                           String role, String classroom, Long classroomId, String token, String avatarUrl, String teacherType) {
         this.id = id;
         this.email = email;
         this.name = name;
@@ -37,6 +39,7 @@ public class UserResponseDTO {
         this.classroomId = classroomId;
         this.token = token;
         this.avatarUrl = avatarUrl;
+        this.teacherType = teacherType;
     }
 
     // Getters and setters
@@ -127,5 +130,13 @@ public class UserResponseDTO {
 
     public void setAvatarUrl(String avatarUrl) {
         this.avatarUrl = avatarUrl;
+    }
+
+    public String getTeacherType() {
+        return teacherType;
+    }
+
+    public void setTeacherType(String teacherType) {
+        this.teacherType = teacherType;
     }
 }

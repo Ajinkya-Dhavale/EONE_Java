@@ -1,5 +1,6 @@
 package com.java.eONE.controller;
 
+import com.java.eONE.enums.RoleType;
 import com.java.eONE.model.Role;
 import com.java.eONE.repository.RoleRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,14 +14,12 @@ import java.util.List;
 @RequestMapping("/api/v1/roles")
 public class RolesController {
 
-    private static final String ADMIN = "ADMIN";  // Same constant name as in Ruby
-
     @Autowired
     private RoleRepository roleRepository;
 
     @GetMapping
     public ResponseEntity<List<Role>> getRoles() {
-        List<Role> roles = roleRepository.findByNameNot(ADMIN);
+        List<Role> roles = roleRepository.findByNameNot(RoleType.ADMIN.getCode());
         return ResponseEntity.ok(roles);
     }
 }

@@ -30,33 +30,79 @@ public class SubjectsController {
 
     @PostMapping
     public ResponseEntity<?> createSubject(@RequestBody Map<String, Object> body) {
-        String name = (String) body.get("name");
-        List<String> daysList = (List<String>) body.get("days_list");
-        String startTime = (String) body.get("start_time");
-        String endTime = (String) body.get("end_time");
-        Long teacherId = Long.valueOf(body.get("teacher_id").toString());
-        Long classroomId = Long.valueOf(body.get("classroom_id").toString());
+        try {
+            // Validate required fields
+            String name = (String) body.get("name");
+            if (name == null || name.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Subject name is required"));
+            }
+            
+            // Get and validate teacher_id
+            Object teacherIdObj = body.get("teacher_id");
+            if (teacherIdObj == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Teacher ID is required"));
+            }
+            Long teacherId;
+            try {
+                if (teacherIdObj instanceof Number) {
+                    teacherId = ((Number) teacherIdObj).longValue();
+                } else {
+                    teacherId = Long.valueOf(teacherIdObj.toString());
+                }
+            } catch (NumberFormatException e) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid teacher ID format"));
+            }
+            
+            // Get and validate classroom_id
+            Object classroomIdObj = body.get("classroom_id");
+            if (classroomIdObj == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Classroom ID is required"));
+            }
+            Long classroomId;
+            try {
+                if (classroomIdObj instanceof Number) {
+                    classroomId = ((Number) classroomIdObj).longValue();
+                } else {
+                    classroomId = Long.valueOf(classroomIdObj.toString());
+                }
+            } catch (NumberFormatException e) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid classroom ID format"));
+            }
 
-        User teacher = userRepository.findById(teacherId)
-                .orElseThrow(() -> new RuntimeException("Teacher not found"));
-        Classroom classroom = classroomRepository.findById(classroomId)
-                .orElseThrow(() -> new RuntimeException("Classroom not found"));
+            // Get optional fields
+            List<String> daysList = (List<String>) body.get("days_list");
+            String startTime = (String) body.get("start_time");
+            String endTime = (String) body.get("end_time");
 
-        Subject subject = new Subject();
-        subject.setName(name);
-        subject.setDaysList(daysList != null ? daysList.toArray(new String[0]) : new String[0]);
-        subject.setStartTime(startTime);
-        subject.setEndTime(endTime);
-        subject.setTeacher(teacher);
-        subject.setClassroom(classroom);
-        subject.setCreatedAt(LocalDateTime.now());
-        subject.setUpdatedAt(LocalDateTime.now());
+            // Find teacher and classroom
+            User teacher = userRepository.findById(teacherId)
+                    .orElseThrow(() -> new RuntimeException("Teacher not found"));
+            Classroom classroom = classroomRepository.findById(classroomId)
+                    .orElseThrow(() -> new RuntimeException("Classroom not found"));
 
-        SubjectDTO savedDto = subjectService.createSubject(subject);
+            // Create subject
+            Subject subject = new Subject();
+            subject.setName(name);
+            subject.setDaysList(daysList != null ? daysList.toArray(new String[0]) : new String[0]);
+            subject.setStartTime(startTime);
+            subject.setEndTime(endTime);
+            subject.setTeacher(teacher);
+            subject.setClassroom(classroom);
+            subject.setCreatedAt(LocalDateTime.now());
+            subject.setUpdatedAt(LocalDateTime.now());
 
-        return ResponseEntity.status(201).body(
-                Map.of("message", "Subject created successfully", "subject", savedDto)
-        );
+            SubjectDTO savedDto = subjectService.createSubject(subject);
+
+            return ResponseEntity.status(201).body(
+                    Map.of("message", "Subject created successfully", "subject", savedDto)
+            );
+        } catch (IllegalArgumentException e) {
+            // Handle duplicate subject name error
+            return ResponseEntity.status(400).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            e.printStackTrace(); // Log the error for debugging
+            return ResponseEntity.status(500).body(Map.of("error", "Failed to create subject: " + e.getMessage()));
+        }
     }
 
 
@@ -97,6 +143,21 @@ public class SubjectsController {
             return ResponseEntity.ok(subjectsDto);
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", "Failed to fetch subjects: " + e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteSubject(@PathVariable Long id) {
+        try {
+            boolean deleted = subjectService.deleteSubject(id);
+            if (deleted) {
+                return ResponseEntity.ok(Map.of("message", "Subject deleted successfully"));
+            } else {
+                return ResponseEntity.status(404).body(Map.of("error", "Subject not found"));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(Map.of("error", "Failed to delete subject: " + e.getMessage()));
         }
     }
 

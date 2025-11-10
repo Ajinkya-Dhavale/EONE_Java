@@ -2,11 +2,21 @@ package com.java.eONE.controller;
 
 import com.java.eONE.DTO.TeacherDashboardCountDTO;
 import com.java.eONE.DTO.UserResponseDTO;
+import com.java.eONE.enums.RoleType;
+import com.java.eONE.enums.TeacherType;
+import com.java.eONE.enums.UserStatus;
 import com.java.eONE.model.Classroom;
 import com.java.eONE.model.Role;
 import com.java.eONE.model.User;
+import com.java.eONE.model.Subject;
+import com.java.eONE.model.Assignment;
+import com.java.eONE.model.AssignmentSubmission;
 import com.java.eONE.repository.ClassroomRepository;
+import com.java.eONE.repository.UserRepository;
 import com.java.eONE.repository.RoleRepository;
+import com.java.eONE.repository.SubjectRepository;
+import com.java.eONE.repository.AssignmentRepository;
+import com.java.eONE.repository.AssignmentSubmissionRepository;
 import com.java.eONE.service.UserService;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,11 +43,16 @@ public class UserController {
     @Autowired private UserService userService;
     @Autowired private RoleRepository roleRepository;
     @Autowired private ClassroomRepository classroomRepository;
+    @Autowired private UserRepository userRepository;
+    @Autowired private SubjectRepository subjectRepository;
+    @Autowired private AssignmentRepository assignmentRepository;
+    @Autowired private AssignmentSubmissionRepository assignmentSubmissionRepository;
     
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody User user,
                                       @RequestParam(required = false) Long roleId,
-                                      @RequestParam(required = false) Long classroomId) {
+                                      @RequestParam(required = false) Long classroomId,
+                                      @RequestParam(required = false) String teacherType) {
 
         if (roleId != null) {
             Role role = roleRepository.findById(roleId)
@@ -49,6 +64,14 @@ public class UserController {
             Classroom classroom = classroomRepository.findById(classroomId)
                 .orElseThrow(() -> new RuntimeException("Classroom not found"));
             user.setClassroom(classroom);
+        }
+
+        // Set teacher type if provided and user is a teacher
+        if (teacherType != null && RoleType.TEACHER.getCode().equals(user.getRole().getName())) {
+            user.setTeacherType(teacherType);
+        } else if (RoleType.TEACHER.getCode().equals(user.getRole().getName())) {
+            // Default to SUBJECT_TEACHER if not specified
+            user.setTeacherType(TeacherType.SUBJECT_TEACHER.getCode());
         }
 
         UserResponseDTO userDTO = userService.registerUser(user);
@@ -145,6 +168,48 @@ public class UserController {
         return ResponseEntity.ok(countDto);
     }
 
+    // Student dashboard overview counts
+    @GetMapping("/student_dashboard_count")
+    public ResponseEntity<?> studentDashboardCount(@RequestParam("student_id") Long studentId) {
+        var userOpt = userRepository.findById(studentId);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("error", "Student not found"));
+        }
+        var student = userOpt.get();
+        var classroom = student.getClassroom();
+        if (classroom == null) {
+            return ResponseEntity.ok(Map.of(
+                "total_subjects", 0,
+                "assignments_due", 0,
+                "pending_submissions", 0
+            ));
+        }
+
+        List<Subject> subjects = subjectRepository.findByClassroomId(classroom.getId());
+        int totalSubjects = subjects.size();
+        List<Long> subjectIds = subjects.stream().map(Subject::getId).toList();
+
+        List<Assignment> assignments = subjectIds.isEmpty() ? java.util.List.of() : assignmentRepository.findBySubjectIdIn(subjectIds);
+
+        // assignments due = assignments with due_date >= today
+        java.time.LocalDate today = java.time.LocalDate.now();
+        int assignmentsDue = (int) assignments.stream()
+            .filter(a -> a.getDueDate() != null && !a.getDueDate().isBefore(today))
+            .count();
+
+        // pending submissions = assignments without a submission by this student
+        List<Long> assignmentIds = assignments.stream().map(Assignment::getId).toList();
+        List<AssignmentSubmission> mySubs = assignmentIds.isEmpty() ? java.util.List.of() : assignmentSubmissionRepository.findByUserId(studentId);
+        java.util.Set<Long> submittedAssignmentIds = mySubs.stream().map(s -> s.getAssignment().getId()).collect(java.util.stream.Collectors.toSet());
+        int pendingSubmissions = (int) assignmentIds.stream().filter(id -> !submittedAssignmentIds.contains(id)).count();
+
+        return ResponseEntity.ok(Map.of(
+            "total_subjects", totalSubjects,
+            "assignments_due", assignmentsDue,
+            "pending_submissions", pendingSubmissions
+        ));
+    }
+
     @PatchMapping("/{id}/profile")
     public ResponseEntity<?> updateProfile(
             @PathVariable Long id,
@@ -205,13 +270,66 @@ public class UserController {
         return ResponseEntity.ok(Map.of("user", dto));
     }
 
+    @PatchMapping("/{id}/block")
+    public ResponseEntity<?> blockUser(@PathVariable Long id) {
+        try {
+            boolean blocked = userService.blockUser(id);
+            if (blocked) {
+                UserResponseDTO updatedUser = userService.getUserById(id);
+                return ResponseEntity.ok(updatedUser);
+            } else {
+                return ResponseEntity.status(404).body(Map.of("error", "User not found"));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                 .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PatchMapping("/{id}/unblock")
+    public ResponseEntity<?> unblockUser(@PathVariable Long id) {
+        try {
+            boolean unblocked = userService.unblockUser(id);
+            if (unblocked) {
+                UserResponseDTO updatedUser = userService.getUserById(id);
+                return ResponseEntity.ok(updatedUser);
+            } else {
+                return ResponseEntity.status(404).body(Map.of("error", "User not found"));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                 .body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @DeleteMapping("/{id}/delete_user")
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
-        boolean deleted = userService.deleteUserById(id);
-        if (deleted) {
-            return ResponseEntity.ok(Map.of("message", "User deleted successfully"));
-        } else {
-            return ResponseEntity.status(404).body(Map.of("error", "User not found"));
+        try {
+            User user = userRepository.findById(id).orElse(null);
+            if (user == null) {
+                return ResponseEntity.status(404).body(Map.of("error", "User not found"));
+            }
+            
+            // Check if teacher has subjects or assignments
+            if (user.getRole() != null && RoleType.TEACHER.getCode().equals(user.getRole().getName())) {
+                boolean canDelete = userService.canDeleteTeacher(id);
+                if (!canDelete && (user.getStatus() == null || user.getStatus() != UserStatus.BLOCKED.getValue())) {
+                    return ResponseEntity.status(400).body(Map.of(
+                        "error", "Cannot delete teacher with subjects or assignments. Please block the teacher first.",
+                        "requires_block", true
+                    ));
+                }
+            }
+            
+            boolean deleted = userService.deleteUserById(id);
+            if (deleted) {
+                return ResponseEntity.ok(Map.of("message", "User deleted successfully"));
+            } else {
+                return ResponseEntity.status(400).body(Map.of("error", "Failed to delete user"));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                 .body(Map.of("error", e.getMessage()));
         }
     }
 }

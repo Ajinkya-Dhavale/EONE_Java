@@ -1,6 +1,7 @@
 package com.java.eONE.service;
 
 import com.java.eONE.DTO.NotificationMessageDTO;
+import com.java.eONE.enums.RoleType;
 import com.java.eONE.model.Notification;
 import com.java.eONE.model.User;
 import com.java.eONE.repository.AssignmentRepository;
@@ -24,7 +25,7 @@ public class NotificationService {
     @Autowired
     private AssignmentRepository assignmentRepository;
 
-    private static final String STUDENT_ROLE_NAME = "Student";
+    // Use RoleType enum instead of hardcoded string
 
     public List<NotificationMessageDTO> getUserNotifications(Long userId, Integer limit) {
         User user = userRepository.findById(userId).orElse(null);
@@ -36,7 +37,7 @@ public class NotificationService {
         System.out.println("Getting notifications for user: " + user.getName() + " (Role: " + user.getRole().getName() + ")");
         List<Notification> notifications;
 
-        if (STUDENT_ROLE_NAME.equals(user.getRole().getName())) {
+        if (RoleType.STUDENT.getCode().equals(user.getRole().getName())) {
             // For students, get ONLY their personal notifications (where user_id = studentId)
             // This includes assignment creation notifications and grading notifications
             notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
