@@ -29,6 +29,9 @@ public class Assignment {
     // File name or path stored in DB (adjust type if needed)
     private String file;
 
+    @Column(name = "total_marks")
+    private Integer totalMarks;
+
     @ManyToOne(optional = false)
     @JoinColumn(name = "subject_id", nullable = false)
     private Subject subject;
@@ -148,6 +151,14 @@ public class Assignment {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Integer getTotalMarks() {
+        return totalMarks;
+    }
+
+    public void setTotalMarks(Integer totalMarks) {
+        this.totalMarks = totalMarks;
     }
 
     // Helper method similar to Rails file_url

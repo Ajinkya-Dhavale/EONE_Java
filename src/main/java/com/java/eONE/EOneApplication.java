@@ -15,7 +15,7 @@ public class EOneApplication implements ApplicationListener<WebServerInitialized
     public static void main(String[] args) {
 
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Kolkata"));
-        System.out.println("🚀 Starting Application...");
+        System.out.println(" Starting Application...");
 
         // seedQuery();
 
@@ -25,6 +25,6 @@ public class EOneApplication implements ApplicationListener<WebServerInitialized
     @Override
     public void onApplicationEvent(WebServerInitializedEvent event) {
         int port = event.getWebServer().getPort();
-        System.out.println("✅ Application is running on port: " + port);
+        System.out.println(" Application is running on port: " + port);
     }
 }

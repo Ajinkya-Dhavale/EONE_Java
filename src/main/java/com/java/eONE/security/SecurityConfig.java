@@ -21,7 +21,9 @@ import org.springframework.http.HttpMethod;
 public class SecurityConfig {
 
  @Bean
- public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
+ public SecurityFilterChain securityFilterChain(HttpSecurity http, 
+                                                 JwtAuthenticationFilter jwtAuthenticationFilter,
+                                                 SecurityExceptionHandler securityExceptionHandler) throws Exception {
      http
          .csrf(csrf -> csrf.disable())
         .authorizeHttpRequests(auth -> auth
@@ -35,6 +37,9 @@ public class SecurityConfig {
         .cors(Customizer.withDefaults())
          .sessionManagement(session -> session
              .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+         )
+         .exceptionHandling(exceptions -> exceptions
+             .authenticationEntryPoint(securityExceptionHandler)
          )
          .httpBasic(Customizer.withDefaults());
 

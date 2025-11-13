@@ -374,6 +374,7 @@ CREATE TABLE IF NOT EXISTS assignments (
     description TEXT,                      -- Assignment description/details
     due_date DATE,                         -- Assignment due date
     file VARCHAR(255),                     -- Assignment file path (if any)
+    total_marks INTEGER,                   -- Total marks for the assignment
     subject_id BIGINT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,  -- Subject this assignment belongs to
     teacher_id BIGINT REFERENCES users(id), -- Teacher who created the assignment
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -398,7 +399,9 @@ CREATE TABLE IF NOT EXISTS assignment_submissions (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     marks INTEGER,                         -- Marks awarded by teacher
-    grade VARCHAR(10)                      -- Grade (e.g., "A", "B", "C")
+    grade VARCHAR(10),                     -- Grade (e.g., "A", "B", "C") - auto-calculated
+    review TEXT,                           -- Teacher review/feedback for resubmission
+    status VARCHAR(20) DEFAULT 'pending'   -- Status: pending, reviewed, graded
 );
 
 -- Indexes for assignment_submissions table
@@ -500,6 +503,43 @@ CREATE UNIQUE INDEX IF NOT EXISTS index_active_storage_variant_records_uniquenes
 
 
 -- ====================================================================================
+-- SECTION: MIGRATION FOR EXISTING DATABASES
+-- ====================================================================================
+-- Purpose: Add missing columns to existing database tables
+-- Description: This section adds columns that were added after initial table creation
+-- Usage: Run these ALTER TABLE statements if you have an existing database
+-- ====================================================================================
+
+-- Migrate classroom unique constraint (for existing databases)
+-- Drop old unique constraints on classrooms.name if they exist
+ALTER TABLE classrooms DROP CONSTRAINT IF EXISTS classrooms_name_key;
+ALTER TABLE classrooms DROP CONSTRAINT IF EXISTS classrooms_name_unique;
+ALTER TABLE classrooms DROP CONSTRAINT IF EXISTS uk_classroom_name;
+-- Note: The new composite unique constraint (uk_classroom_name_batch_year) is already
+-- defined in the CREATE TABLE statement above. For existing databases, you may need to
+-- manually add it if it doesn't exist: ALTER TABLE classrooms ADD CONSTRAINT uk_classroom_name_batch_year UNIQUE (name, batch_year_id, year);
+
+-- Add total_marks column to assignments table (if not exists)
+-- This column was added to support setting total marks when creating assignments
+ALTER TABLE assignments 
+ADD COLUMN IF NOT EXISTS total_marks INTEGER;
+
+-- Add review column to assignment_submissions table (if not exists)
+-- This column stores teacher review/feedback for student submissions
+ALTER TABLE assignment_submissions 
+ADD COLUMN IF NOT EXISTS review TEXT;
+
+-- Add status column to assignment_submissions table (if not exists)
+-- This column tracks submission status: pending, reviewed, graded
+ALTER TABLE assignment_submissions 
+ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending';
+
+-- Update existing records to have 'pending' status if status is NULL
+UPDATE assignment_submissions 
+SET status = 'pending' 
+WHERE status IS NULL;
+
+-- ====================================================================================
 -- END OF MIGRATION FILE
 -- ====================================================================================
 -- 
@@ -515,9 +555,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS index_active_storage_variant_records_uniquenes
 --   1. All tables were created: \dt in psql
 --   2. All indexes were created: \di in psql
 --   3. All foreign key constraints exist: Check pg_constraint table
+--   4. New columns exist: Check information_schema.columns for total_marks, review, status
 --
 -- IMPORTANT NOTES:
 --   - Status values: 0=Pending, 1=Approved, 2=Rejected, 3=Blocked
+--   - Submission status values: pending, reviewed, graded
 --   - All timestamps use NOW() for current timestamp
 --   - All foreign keys have appropriate CASCADE or SET NULL behaviors
 --   - Tables are created with IF NOT EXISTS to prevent errors on re-run

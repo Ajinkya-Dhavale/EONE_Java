@@ -59,7 +59,8 @@ public class NotificationService {
         return notifications.stream()
                 .map(n -> {
                     String type = n.getAssignment() != null ? "assignment" : "general";
-                    return new NotificationMessageDTO(n.getMessage(), n.getCreatedAt(), type);
+                    Long assignmentId = n.getAssignment() != null ? n.getAssignment().getId() : null;
+                    return new NotificationMessageDTO(n.getMessage(), n.getCreatedAt(), type, assignmentId);
                 })
                 .collect(Collectors.toList());
     }

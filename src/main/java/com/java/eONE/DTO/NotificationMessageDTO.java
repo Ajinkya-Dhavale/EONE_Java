@@ -12,10 +12,14 @@ public class NotificationMessageDTO {
 
     private String type; // "assignment" or "general"
 
-    public NotificationMessageDTO(String message, LocalDateTime createdAt, String type) {
+    @JsonProperty("assignment_id")
+    private Long assignmentId; // ID of related assignment (if any)
+
+    public NotificationMessageDTO(String message, LocalDateTime createdAt, String type, Long assignmentId) {
         this.message = message;
         this.createdAt = createdAt;
         this.type = type;
+        this.assignmentId = assignmentId;
     }
 
     // Default constructor needed for Jackson
@@ -30,4 +34,7 @@ public class NotificationMessageDTO {
 
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
+
+    public Long getAssignmentId() { return assignmentId; }
+    public void setAssignmentId(Long assignmentId) { this.assignmentId = assignmentId; }
 }

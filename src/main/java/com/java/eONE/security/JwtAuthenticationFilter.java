@@ -30,27 +30,50 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
+        // Skip JWT validation for public endpoints
+        String path = request.getRequestURI();
+        if (path.startsWith("/api/v1/auth/login") || 
+            path.startsWith("/api/v1/users/register") ||
+            path.startsWith("/uploads/") ||
+            path.startsWith("/submissionFile/") ||
+            request.getMethod().equals("OPTIONS")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
-            Claims claims = jwtUtil.validateAndGetClaims(token);
-            if (claims != null) {
-                Object userId = claims.get("id");
-                Object role = claims.get("role");
+            try {
+                Claims claims = jwtUtil.validateAndGetClaims(token);
+                if (claims != null) {
+                    Object userId = claims.get("id");
+                    Object role = claims.get("role");
 
-                List<GrantedAuthority> authorities = new ArrayList<>();
-                if (role != null) {
-                    // Spring convention expects ROLE_ prefix for simple role checks
-                    authorities.add(new SimpleGrantedAuthority("ROLE_" + role.toString()));
+                    List<GrantedAuthority> authorities = new ArrayList<>();
+                    if (role != null) {
+                        // Spring convention expects ROLE_ prefix for simple role checks
+                        authorities.add(new SimpleGrantedAuthority("ROLE_" + role.toString()));
+                    }
+
+                    Authentication auth = new UsernamePasswordAuthenticationToken(
+                            Objects.toString(userId, null),
+                            null,
+                            authorities
+                    );
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                    System.out.println("JWT authentication successful for user: " + userId + ", role: " + role + ", path: " + path);
+                } else {
+                    // Token is invalid or expired
+                    System.out.println("JWT token validation failed for request: " + request.getMethod() + " " + path);
+                    System.out.println("Token provided: " + (token.length() > 20 ? token.substring(0, 20) + "..." : token));
                 }
-
-                Authentication auth = new UsernamePasswordAuthenticationToken(
-                        Objects.toString(userId, null),
-                        null,
-                        authorities
-                );
-                SecurityContextHolder.getContext().setAuthentication(auth);
+            } catch (Exception e) {
+                System.out.println("JWT token processing error for " + request.getMethod() + " " + path + ": " + e.getMessage());
+                e.printStackTrace();
             }
+        } else {
+            System.out.println("No Authorization header found for request: " + request.getMethod() + " " + path);
         }
 
         filterChain.doFilter(request, response);

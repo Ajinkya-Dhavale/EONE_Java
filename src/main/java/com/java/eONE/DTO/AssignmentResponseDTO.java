@@ -12,6 +12,7 @@ public class AssignmentResponseDTO {
     private String file;
     private Long subjectId;
     private Long teacherId;
+    private Integer totalMarks;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String fileUrl;
@@ -46,4 +47,7 @@ public class AssignmentResponseDTO {
 
     public String getFileUrl() { return fileUrl; }
     public void setFileUrl(String fileUrl) { this.fileUrl = fileUrl; }
+
+    public Integer getTotalMarks() { return totalMarks; }
+    public void setTotalMarks(Integer totalMarks) { this.totalMarks = totalMarks; }
 }

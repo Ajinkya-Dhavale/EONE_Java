@@ -26,6 +26,8 @@ public class AssignmentSubmissionResponseDTO {
     
     private Integer marks;
     private String grade;
+    private String review;
+    private String status;
     
     @JsonProperty("file_url")
     private String fileUrl; // computed field
@@ -126,5 +128,21 @@ public class AssignmentSubmissionResponseDTO {
 
     public void setFileUrl(String fileUrl) {
         this.fileUrl = fileUrl;
+    }
+
+    public String getReview() {
+        return review;
+    }
+
+    public void setReview(String review) {
+        this.review = review;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 }

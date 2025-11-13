@@ -373,6 +373,7 @@ CREATE TABLE IF NOT EXISTS assignments (
     description TEXT,                      -- Assignment description/details
     due_date DATE,                         -- Assignment due date
     file VARCHAR(255),                     -- Assignment file path (if any)
+    total_marks INTEGER,                   -- Total marks for the assignment
     subject_id BIGINT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,  -- Subject this assignment belongs to
     teacher_id BIGINT REFERENCES users(id), -- Teacher who created the assignment
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -397,7 +398,9 @@ CREATE TABLE IF NOT EXISTS assignment_submissions (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     marks INTEGER,                         -- Marks awarded by teacher
-    grade VARCHAR(10)                      -- Grade (e.g., "A", "B", "C")
+    grade VARCHAR(10),                     -- Grade (e.g., "A", "B", "C") - auto-calculated
+    review TEXT,                           -- Teacher review/feedback for resubmission
+    status VARCHAR(20) DEFAULT 'pending'   -- Status: pending, reviewed, graded
 );
 
 -- Indexes for assignment_submissions table
@@ -522,43 +525,6 @@ ON CONFLICT (name) DO UPDATE SET
     updated_at = EXCLUDED.updated_at;
 
 -- ------------------------------------------------------------------------------------
--- CREATE ADMIN USER
--- ------------------------------------------------------------------------------------
--- Purpose: Create default admin user for system access
--- Description: Creates an admin user that can log in and manage the system
--- Default Credentials:
---   Email: admin@eone.com
---   Password: admin123
---   Status: Approved (1)
--- Note: Only inserts if user doesn't exist (prevents duplicate admin users)
--- Note: DataInitializer.java creates admin@gmail.com, this creates admin@eone.com
--- ⚠️ IMPORTANT: Change the password in production!
-INSERT INTO users (
-    email, 
-    name, 
-    password_digest, 
-    mobile_number, 
-    status, 
-    date_of_birth, 
-    role_id, 
-    created_at, 
-    updated_at
-) 
-SELECT 
-    'admin@eone.com',                    -- Admin email
-    'System Administrator',               -- Admin name
-    '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVEFDa', -- Password: admin123 (BCrypt hashed)
-    '+1234567890',                       -- Mobile number
-    1,                                   -- Status: 1 = Approved (can log in immediately)
-    '1990-01-01',                        -- Date of birth
-    (SELECT id FROM roles WHERE name = 'ADMIN' LIMIT 1), -- Get ADMIN role ID
-    NOW(),                               -- Created at
-    NOW()                                -- Updated at
-WHERE NOT EXISTS (
-    SELECT 1 FROM users WHERE email = 'admin@eone.com'
-);
-
--- ------------------------------------------------------------------------------------
 -- INSERT BATCH YEARS
 -- ------------------------------------------------------------------------------------
 -- Purpose: Create initial batch year options for classroom creation
@@ -574,6 +540,42 @@ ON CONFLICT (name) DO UPDATE SET
     display_order = EXCLUDED.display_order;
 
 -- ====================================================================================
+-- SECTION: MIGRATION FOR EXISTING DATABASES
+-- ====================================================================================
+-- Purpose: Add missing columns to existing database tables
+-- Description: This section adds columns that were added after initial table creation
+-- Usage: These ALTER TABLE statements run automatically for existing databases
+-- ====================================================================================
+
+-- Migrate classroom unique constraint (for existing databases)
+-- Drop old unique constraints on classrooms.name if they exist
+ALTER TABLE classrooms DROP CONSTRAINT IF EXISTS classrooms_name_key;
+ALTER TABLE classrooms DROP CONSTRAINT IF EXISTS classrooms_name_unique;
+ALTER TABLE classrooms DROP CONSTRAINT IF EXISTS uk_classroom_name;
+-- Note: The new composite unique constraint (uk_classroom_name_batch_year) is already
+-- defined in the CREATE TABLE statement above and will be created by Hibernate automatically
+
+-- Add total_marks column to assignments table (if not exists)
+-- This column was added to support setting total marks when creating assignments
+ALTER TABLE assignments 
+ADD COLUMN IF NOT EXISTS total_marks INTEGER;
+
+-- Add review column to assignment_submissions table (if not exists)
+-- This column stores teacher review/feedback for student submissions
+ALTER TABLE assignment_submissions 
+ADD COLUMN IF NOT EXISTS review TEXT;
+
+-- Add status column to assignment_submissions table (if not exists)
+-- This column tracks submission status: pending, reviewed, graded
+ALTER TABLE assignment_submissions 
+ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending';
+
+-- Update existing records to have 'pending' status if status is NULL
+UPDATE assignment_submissions 
+SET status = 'pending' 
+WHERE status IS NULL;
+
+-- ====================================================================================
 -- END OF SCHEMA SETUP
 -- ====================================================================================
 -- 
@@ -585,18 +587,24 @@ ON CONFLICT (name) DO UPDATE SET
 --   1. Checking that all tables were created: \dt in psql
 --   2. Checking that roles were created (ADMIN, Teacher, Student)
 --   3. Checking that admin user was created (admin@eone.com)
---   4. Testing admin login with:
+--   4. Checking that new columns exist: 
+--      SELECT column_name FROM information_schema.columns 
+--      WHERE table_name IN ('assignments', 'assignment_submissions') 
+--      AND column_name IN ('total_marks', 'review', 'status');
+--   5. Testing admin login with:
 --      Email: admin@eone.com
 --      Password: admin123
 --
 -- IMPORTANT NOTES:
 --   - Default admin password is 'admin123' - CHANGE THIS IN PRODUCTION!
 --   - Status values: 0=Pending, 1=Approved, 2=Rejected, 3=Blocked
+--   - Submission status values: pending, reviewed, graded
 --   - All timestamps use NOW() for current timestamp
 --   - All foreign keys have appropriate CASCADE or SET NULL behaviors
 --   - Tables are created with IF NOT EXISTS to prevent errors on re-run
 --   - Data inserts use ON CONFLICT to prevent duplicate errors
 --   - DataInitializer.java also creates roles and admin user (admin@gmail.com)
 --   - This SQL file creates admin@eone.com as an alternative admin user
+--   - Migration section adds missing columns (total_marks, review, status) for existing databases
 --
 -- ====================================================================================
