@@ -10,7 +10,9 @@ public interface AssignmentSubmissionService {
     AssignmentSubmission saveSubmission(AssignmentSubmission submission);
     Optional<AssignmentSubmission> getSubmissionById(Long id);
     AssignmentSubmission updateMarksAndGrade(Long id, Integer marks, String grade);
+    AssignmentSubmission submitReview(Long id, String review);
     List<AssignmentSubmission> findByUserId(Long userId);
+    List<AssignmentSubmission> findByAssignmentIdAndUserId(Long assignmentId, Long userId);
     List<ViewSubmittedAssignmentDTO> getSubmissionsByAssignment(Long assignmentId);
     
     boolean submitMarks(Long submissionId, Integer marks, String grade);

@@ -7,9 +7,15 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
-@Table(name = "classrooms", indexes = {
-    @Index(name = "index_classrooms_on_teacher_id", columnList = "teacher_id")
-})
+@Table(name = "classrooms", 
+    indexes = {
+        @Index(name = "index_classrooms_on_teacher_id", columnList = "teacher_id"),
+        @Index(name = "index_classrooms_on_batch_year_id", columnList = "batch_year_id")
+    },
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uk_classroom_name_batch_year", columnNames = {"name", "batch_year_id", "year"})
+    }
+)
 public class Classroom {
 
     @Id
@@ -17,12 +23,16 @@ public class Classroom {
     private Long id;
 
     @NotBlank(message = "Name is mandatory")
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String name;
 
     @ManyToOne
     @JoinColumn(name = "teacher_id")
     private User teacher;
+
+    @ManyToOne
+    @JoinColumn(name = "batch_year_id")
+    private BatchYear batchYear;
 
     @NotNull
     @Column(name = "is_active", nullable = false)
@@ -45,7 +55,7 @@ public class Classroom {
         updatedAt = LocalDateTime.now();
     }
 
-    private String batch;
+    private String batch; // Legacy field - kept for backward compatibility
 
     private String year;
 
@@ -81,6 +91,18 @@ public class Classroom {
 
     public void setTeacher(User teacher) {
         this.teacher = teacher;
+    }
+
+    public BatchYear getBatchYear() {
+        return batchYear;
+    }
+
+    public void setBatchYear(BatchYear batchYear) {
+        this.batchYear = batchYear;
+        // Sync batch field for backward compatibility
+        if (batchYear != null) {
+            this.batch = batchYear.getName();
+        }
     }
 
     public Boolean getIsActive() {

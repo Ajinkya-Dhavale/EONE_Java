@@ -7,6 +7,7 @@ import com.java.eONE.repository.UserRepository;
 import com.java.eONE.repository.ClassroomRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -23,8 +24,19 @@ public class SubjectService {
     @Autowired
     private ClassroomRepository classroomRepository;
 
+    @Transactional
     public SubjectDTO createSubject(Subject subject) {
-        // Could add validation here if needed
+        // Check for duplicate subject name for the same teacher and classroom
+        if (subject.getTeacher() != null && subject.getClassroom() != null) {
+            java.util.Optional<Subject> existing = subjectRepository.findByTeacherIdAndClassroomIdAndNameIgnoreCase(
+                    subject.getTeacher().getId(),
+                    subject.getClassroom().getId(),
+                    subject.getName().trim()
+            );
+            if (existing.isPresent()) {
+                throw new IllegalArgumentException("Subject with name '" + subject.getName() + "' already exists for this teacher in this classroom.");
+            }
+        }
 
         Subject savedSubject = subjectRepository.save(subject);
         return toDTO(savedSubject);
@@ -38,6 +50,15 @@ public class SubjectService {
     public List<SubjectDTO> getSubjectsByClassroomId(Long classroomId) {
         List<Subject> subjects = subjectRepository.findByClassroomId(classroomId);
         return subjects.stream().map(this::toDTO).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public boolean deleteSubject(Long subjectId) {
+        if (!subjectRepository.existsById(subjectId)) {
+            return false;
+        }
+        subjectRepository.deleteById(subjectId);
+        return true;
     }
 
     // Convert Subject entity to SubjectDTO

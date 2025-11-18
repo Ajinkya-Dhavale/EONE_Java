@@ -47,6 +47,10 @@ public class User {
     @Column(name = "avatar")
     private String avatar;
 
+    // New field to differentiate class teachers from subject teachers
+    @Column(name = "teacher_type")
+    private String teacherType;
+
     // Getters and setters
     @Transient
     private String password;  // plain password input from client (not persisted)
@@ -164,5 +168,14 @@ public class User {
 
     public void setAvatar(String avatar) {
         this.avatar = avatar;
+    }
+
+    // Getters and setters for teacherType
+    public String getTeacherType() {
+        return teacherType;
+    }
+
+    public void setTeacherType(String teacherType) {
+        this.teacherType = teacherType;
     }
 }

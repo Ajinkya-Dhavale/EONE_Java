@@ -1,5 +1,7 @@
 package com.java.eONE.controller;
 
+import com.java.eONE.enums.RoleType;
+
 import com.java.eONE.DTO.AssignmentRequestDTO;
 import com.java.eONE.DTO.AssignmentResponseDTO;
 import com.java.eONE.DTO.ViewSubmittedAssignmentDTO;
@@ -62,6 +64,7 @@ public class AssignmentController {
             @RequestParam("due_date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate dueDate,
             @RequestParam("subject_id") Long subjectId,
             @RequestParam("teacher_id") Long teacherId,
+            @RequestParam("total_marks") Integer totalMarks,
             @RequestParam("file") MultipartFile file) {
 
         Optional<Subject> subjectOpt = subjectRepository.findById(subjectId);
@@ -90,6 +93,7 @@ public class AssignmentController {
         assignment.setDescription(description);
         assignment.setDueDate(dueDate);
         assignment.setFile(fileName);
+        assignment.setTotalMarks(totalMarks);
         assignment.setSubject(subjectOpt.get());
         assignment.setTeacher(teacherOpt.get());
         assignment.setCreatedAt(LocalDateTime.now());
@@ -105,7 +109,7 @@ public class AssignmentController {
         var classroom = subject.getClassroom();
         if (classroom != null) {
             // Get all students in the classroom
-            var students = userRepository.findByClassroomIdAndRoleName(classroom.getId(), "Student");
+            var students = userRepository.findByClassroomIdAndRoleName(classroom.getId(), RoleType.STUDENT.getCode());
             
             for (User student : students) {
                 Notification studentNotification = new Notification();
@@ -165,6 +169,7 @@ public class AssignmentController {
             map.put("subject_name", a.getSubject() != null ? a.getSubject().getName() : null);
             map.put("teacher_id", a.getTeacher() != null ? a.getTeacher().getId() : null);
             map.put("teacher_name", a.getTeacher() != null ? a.getTeacher().getName() : null);
+            map.put("total_marks", a.getTotalMarks());
 
             String fileUrl = null;
             if (a.getFile() != null && !a.getFile().isEmpty()) {
@@ -194,32 +199,56 @@ public class AssignmentController {
             @PathVariable Long submissionId,
             @RequestBody Map<String, Object> payload) {
 
-        Integer marks = (payload.get("marks") instanceof Number)
-                ? ((Number) payload.get("marks")).intValue() : null;
-        String grade = (String) payload.get("grade");
-        boolean success = submissionService.submitMarks(submissionId, marks, grade);
-
-        if (success) {
-            // Create notification for student about grading
+        try {
+            Integer marks = (payload.get("marks") instanceof Number)
+                    ? ((Number) payload.get("marks")).intValue() : null;
+            String grade = (payload.get("grade") != null) ? payload.get("grade").toString() : null;
+            
+            // Validate marks don't exceed total marks
             var submissionOpt = submissionService.getSubmissionById(submissionId);
-            if (submissionOpt.isPresent()) {
-                var submission = submissionOpt.get();
-                Notification notification = new Notification();
-                notification.setUser(submission.getUser()); // Student who submitted
-                notification.setTeacher(null); // Ensure teacher is null for student notification
-                notification.setAssignment(submission.getAssignment());
-                notification.setMessage("Your assignment '" + submission.getAssignment().getTitle() + 
-                    "' has been graded. Marks: " + (marks != null ? marks : "N/A") + 
-                    (grade != null && !grade.isEmpty() ? ", Grade: " + grade : ""));
-                notification.setCreatedAt(LocalDateTime.now());
-                notification.setUpdatedAt(LocalDateTime.now());
-                notificationRepository.save(notification);
+            if (submissionOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Submission not found"));
             }
             
-            return ResponseEntity.ok(Map.of("message", "Marks submitted successfully"));
-        } else {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "Submission not found"));
+            var submission = submissionOpt.get();
+            if (marks != null && submission.getAssignment().getTotalMarks() != null) {
+                if (marks > submission.getAssignment().getTotalMarks()) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body(Map.of("error", "Marks cannot exceed total marks (" + submission.getAssignment().getTotalMarks() + ")"));
+                }
+            }
+            
+            boolean success = submissionService.submitMarks(submissionId, marks, grade);
+
+            if (success) {
+                // Get updated submission for notification
+                var updatedSubmissionOpt = submissionService.getSubmissionById(submissionId);
+                if (updatedSubmissionOpt.isPresent()) {
+                    var updatedSubmission = updatedSubmissionOpt.get();
+                    Notification notification = new Notification();
+                    notification.setUser(updatedSubmission.getUser()); // Student who submitted
+                    notification.setTeacher(null); // Ensure teacher is null for student notification
+                    notification.setAssignment(updatedSubmission.getAssignment());
+                    notification.setMessage("Your assignment '" + updatedSubmission.getAssignment().getTitle() + 
+                        "' has been graded. Marks: " + (marks != null ? marks + "/" + updatedSubmission.getAssignment().getTotalMarks() : "N/A") + 
+                        (updatedSubmission.getGrade() != null && !updatedSubmission.getGrade().isEmpty() ? ", Grade: " + updatedSubmission.getGrade() : ""));
+                    notification.setCreatedAt(LocalDateTime.now());
+                    notification.setUpdatedAt(LocalDateTime.now());
+                    notificationRepository.save(notification);
+                }
+                
+                return ResponseEntity.ok(Map.of("message", "Marks submitted successfully"));
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Submission not found"));
+            }
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to submit marks: " + e.getMessage()));
         }
     }
 
@@ -230,6 +259,7 @@ public class AssignmentController {
             @RequestParam(required = false) String description,
             @RequestParam(name = "due_date", required = false)
             @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate dueDate,
+            @RequestParam(name = "total_marks", required = false) Integer totalMarks,
             @RequestParam(name = "file", required = false) MultipartFile file) {
 
         Optional<Assignment> opt = assignmentRepository.findById(id);
@@ -253,6 +283,7 @@ public class AssignmentController {
         if (title != null) assignment.setTitle(title);
         if (description != null) assignment.setDescription(description);
         if (dueDate != null) assignment.setDueDate(dueDate);
+        if (totalMarks != null) assignment.setTotalMarks(totalMarks);
 
         if (file != null && !file.isEmpty()) {
             String uploadDir = "uploads";
@@ -305,6 +336,7 @@ public class AssignmentController {
         dto.setDescription(assignment.getDescription());
         dto.setDueDate(assignment.getDueDate());
         dto.setFile(assignment.getFile());
+        dto.setTotalMarks(assignment.getTotalMarks());
         dto.setSubjectId(assignment.getSubject().getId());
         dto.setTeacherId(assignment.getTeacher() != null ? assignment.getTeacher().getId() : null);
         dto.setCreatedAt(assignment.getCreatedAt());

@@ -35,6 +35,13 @@ public class AssignmentSubmission {
 
     @Column(nullable = true)
     private String grade;
+
+    @Column(columnDefinition = "TEXT")
+    private String review;
+
+    @Column(nullable = false)
+    private String status = "pending";
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -110,6 +117,22 @@ public class AssignmentSubmission {
 
     public void setGrade(String grade) {
         this.grade = grade;
+    }
+
+    public String getReview() {
+        return review;
+    }
+
+    public void setReview(String review) {
+        this.review = review;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 
     // Helper method to get file URL (similar to Rails' file_url)

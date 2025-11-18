@@ -1,6 +1,7 @@
 package com.java.eONE.controller;
 
 import com.java.eONE.DTO.NotificationMessageDTO;
+import com.java.eONE.enums.RoleType;
 import com.java.eONE.model.Notification;
 import com.java.eONE.model.User;
 import com.java.eONE.repository.AssignmentRepository;
@@ -173,7 +174,7 @@ public class NotificationsController {
             }
             
             // Get all students in the classroom
-            var students = userRepository.findByClassroomIdAndRoleName(classroom.getId(), "Student");
+            var students = userRepository.findByClassroomIdAndRoleName(classroom.getId(), RoleType.STUDENT.getCode());
             
             int notificationCount = 0;
             for (User student : students) {

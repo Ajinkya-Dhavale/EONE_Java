@@ -138,7 +138,11 @@ public class ViewSubmittedAssignmentDTO {
     private LocalDateTime createdAt;
     private Integer marks;
     private String grade;
+    private String review;
     private String status;
+    
+    @JsonProperty("total_marks")
+    private Integer totalMarks; // Total marks for the assignment
 
     // Getters & Setters
 
@@ -171,4 +175,10 @@ public class ViewSubmittedAssignmentDTO {
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+
+    public String getReview() { return review; }
+    public void setReview(String review) { this.review = review; }
+
+    public Integer getTotalMarks() { return totalMarks; }
+    public void setTotalMarks(Integer totalMarks) { this.totalMarks = totalMarks; }
 }

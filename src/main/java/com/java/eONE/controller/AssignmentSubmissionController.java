@@ -59,6 +59,30 @@ public class AssignmentSubmissionController {
                     .body(Map.of("error", "Invalid assignment_id or user_id"));
         }
 
+        // Check if submission already exists for this assignment and user
+        var existingSubmissions = submissionService.findByAssignmentIdAndUserId(assignmentId, userId);
+        AssignmentSubmission submission;
+        
+        if (!existingSubmissions.isEmpty()) {
+            // Use the most recent submission
+            submission = existingSubmissions.get(0);
+            
+            // Check if it's already graded (not reviewed)
+            if ("graded".equals(submission.getStatus()) && submission.getMarks() != null) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(Map.of("error", "Assignment already graded. Cannot resubmit."));
+            }
+            
+            // If reviewed, allow resubmission by updating the existing submission
+            // If pending, update the existing submission
+        } else {
+            // Create new submission
+            submission = new AssignmentSubmission();
+            submission.setAssignment(assignment);
+            submission.setUser(user);
+            submission.setCreatedAt(LocalDateTime.now());
+        }
+
         String uploadDir = System.getProperty("user.dir") + File.separator + "submissionFile";
         String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
         Path filePath = Paths.get(uploadDir, fileName);
@@ -72,12 +96,17 @@ public class AssignmentSubmissionController {
                     .body(Map.of("error", "Failed to save file"));
         }
 
-        AssignmentSubmission submission = new AssignmentSubmission();
-        submission.setAssignment(assignment);
-        submission.setUser(user);
+        // Update submission with new file
         submission.setFile(fileName);
-        submission.setCreatedAt(LocalDateTime.now());
         submission.setUpdatedAt(LocalDateTime.now());
+        
+        // If resubmitting after review, reset status to pending and clear review
+        if ("reviewed".equals(submission.getStatus())) {
+            submission.setStatus("pending");
+            submission.setReview(null);
+        } else if (submission.getStatus() == null) {
+            submission.setStatus("pending");
+        }
 
         AssignmentSubmission savedSubmission = submissionService.saveSubmission(submission);
 
@@ -100,6 +129,8 @@ public class AssignmentSubmissionController {
         responseDTO.setUpdatedAt(savedSubmission.getUpdatedAt());
         responseDTO.setMarks(savedSubmission.getMarks());
         responseDTO.setGrade(savedSubmission.getGrade());
+        responseDTO.setReview(savedSubmission.getReview());
+        responseDTO.setStatus(savedSubmission.getStatus() != null ? savedSubmission.getStatus() : "pending");
         String fileUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
                 .path("/submissionFile/")
                 .path(savedSubmission.getFile())
@@ -116,23 +147,83 @@ public class AssignmentSubmissionController {
             @PathVariable Long id,
             @RequestBody Map<String, Object> payload
     ) {
-        Integer marks = (payload.get("marks") instanceof Number) ? ((Number) payload.get("marks")).intValue() : null;
-        String grade = (String) payload.get("grade");
-        AssignmentSubmission updatedSubmission = submissionService.updateMarksAndGrade(id, marks, grade);
-        
-        // Create notification for student about grading
-        Notification notification = new Notification();
-        notification.setUser(updatedSubmission.getUser()); // Student who submitted
-        notification.setTeacher(null); // Ensure teacher is null for student notification
-        notification.setAssignment(updatedSubmission.getAssignment());
-        notification.setMessage("Your assignment '" + updatedSubmission.getAssignment().getTitle() + 
-            "' has been graded. Marks: " + (marks != null ? marks : "N/A") + 
-            (grade != null && !grade.isEmpty() ? ", Grade: " + grade : ""));
-        notification.setCreatedAt(LocalDateTime.now());
-        notification.setUpdatedAt(LocalDateTime.now());
-        notificationRepository.save(notification);
-        
-        return ResponseEntity.ok(Map.of("message", "Marks updated successfully", "submission", updatedSubmission));
+        try {
+            Integer marks = (payload.get("marks") instanceof Number) ? ((Number) payload.get("marks")).intValue() : null;
+            String grade = (payload.get("grade") != null) ? payload.get("grade").toString() : null;
+            
+            // Validate marks don't exceed total marks
+            var submissionOpt = submissionService.getSubmissionById(id);
+            if (submissionOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Submission not found"));
+            }
+            
+            var submission = submissionOpt.get();
+            if (marks != null && submission.getAssignment().getTotalMarks() != null) {
+                if (marks > submission.getAssignment().getTotalMarks()) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body(Map.of("error", "Marks cannot exceed total marks (" + submission.getAssignment().getTotalMarks() + ")"));
+                }
+            }
+            
+            AssignmentSubmission updatedSubmission = submissionService.updateMarksAndGrade(id, marks, grade);
+            
+            // Create notification for student about grading
+            Notification notification = new Notification();
+            notification.setUser(updatedSubmission.getUser()); // Student who submitted
+            notification.setTeacher(null); // Ensure teacher is null for student notification
+            notification.setAssignment(updatedSubmission.getAssignment());
+            notification.setMessage("Your assignment '" + updatedSubmission.getAssignment().getTitle() + 
+                "' has been graded. Marks: " + (marks != null ? marks + "/" + updatedSubmission.getAssignment().getTotalMarks() : "N/A") + 
+                (updatedSubmission.getGrade() != null && !updatedSubmission.getGrade().isEmpty() ? ", Grade: " + updatedSubmission.getGrade() : ""));
+            notification.setCreatedAt(LocalDateTime.now());
+            notification.setUpdatedAt(LocalDateTime.now());
+            notificationRepository.save(notification);
+            
+            return ResponseEntity.ok(Map.of("message", "Marks updated successfully", "submission", updatedSubmission));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to update marks: " + e.getMessage()));
+        }
+    }
+
+    // ---------------- Teacher review submission ----------------
+    @PatchMapping("/review/{id}")
+    public ResponseEntity<?> submitReview(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> payload
+    ) {
+        try {
+            String review = (String) payload.get("review");
+            if (review == null || review.trim().isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Map.of("error", "Review cannot be empty"));
+            }
+            
+            AssignmentSubmission updatedSubmission = submissionService.submitReview(id, review);
+            
+            // Create notification for student about review
+            Notification notification = new Notification();
+            notification.setUser(updatedSubmission.getUser()); // Student who submitted
+            notification.setTeacher(null); // Ensure teacher is null for student notification
+            notification.setAssignment(updatedSubmission.getAssignment());
+            notification.setMessage("Your assignment '" + updatedSubmission.getAssignment().getTitle() + 
+                "' has been reviewed. Please check the review and resubmit if needed.");
+            notification.setCreatedAt(LocalDateTime.now());
+            notification.setUpdatedAt(LocalDateTime.now());
+            notificationRepository.save(notification);
+            
+            return ResponseEntity.ok(Map.of("message", "Review submitted successfully", "submission", updatedSubmission));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to submit review: " + e.getMessage()));
+        }
     }
 
     // ---------------- Student submissions list ----------------
@@ -156,6 +247,10 @@ public class AssignmentSubmissionController {
                     dto.setUpdatedAt(sub.getUpdatedAt());
                     dto.setMarks(sub.getMarks());
                     dto.setGrade(sub.getGrade());
+                    dto.setReview(sub.getReview());
+                    dto.setStatus(sub.getStatus() != null ? sub.getStatus() : 
+                        (sub.getMarks() != null ? "graded" : 
+                        (sub.getReview() != null && !sub.getReview().isEmpty() ? "reviewed" : "pending")));
                     
                     // Generate proper file URL similar to how teacher assignments work
                     String fileUrl = null;
@@ -184,13 +279,24 @@ public class AssignmentSubmissionController {
         }
         var submission = opt.get();
 
-        if (submission.getMarks() != null || (submission.getGrade() != null && !submission.getGrade().isEmpty())) {
+        // Allow resubmission if reviewed (status = "reviewed") or if not yet graded
+        boolean isGraded = submission.getMarks() != null || 
+                          (submission.getGrade() != null && !submission.getGrade().isEmpty()) ||
+                          "graded".equals(submission.getStatus());
+        
+        if (isGraded && !"reviewed".equals(submission.getStatus())) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "Submission already graded"));
         }
 
         var assignment = submission.getAssignment();
         if (assignment.getDueDate() != null && assignment.getDueDate().isBefore(java.time.LocalDate.now())) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "Past due date"));
+        }
+        
+        // If resubmitting after review, reset status to pending and clear review
+        if ("reviewed".equals(submission.getStatus())) {
+            submission.setStatus("pending");
+            submission.setReview(null);
         }
 
         String uploadDir = System.getProperty("user.dir") + File.separator + "submissionFile";

@@ -46,8 +46,23 @@ public class JwtUtil {
                     .build()
                     .parseClaimsJws(token)
                     .getBody();
+        } catch (ExpiredJwtException ex) {
+            System.out.println("JWT token expired: " + ex.getMessage());
+            return null;
+        } catch (MalformedJwtException ex) {
+            System.out.println("JWT token malformed: " + ex.getMessage());
+            return null;
+        } catch (UnsupportedJwtException ex) {
+            System.out.println("JWT token unsupported: " + ex.getMessage());
+            return null;
+        } catch (IllegalArgumentException ex) {
+            System.out.println("JWT token is empty or null: " + ex.getMessage());
+            return null;
         } catch (JwtException ex) {
-            // log or handle exceptions (expired, malformed, etc.)
+            System.out.println("JWT validation error: " + ex.getClass().getSimpleName() + " - " + ex.getMessage());
+            return null;
+        } catch (Exception ex) {
+            System.out.println("Unexpected error validating JWT: " + ex.getMessage());
             return null;
         }
     }

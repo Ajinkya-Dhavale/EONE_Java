@@ -2,6 +2,7 @@ package com.java.eONE.controller;
 
 import com.java.eONE.DTO.UserResponseDTO;
 import com.java.eONE.model.User;
+import com.java.eONE.security.JwtUtil;
 import com.java.eONE.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
@@ -17,6 +18,8 @@ public class AuthController {
 
     @Autowired
     private UserService userService;
+    @Autowired
+    private JwtUtil jwtUtil;
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> loginRequest) {
@@ -32,12 +35,18 @@ public class AuthController {
 
         User user = userOpt.get();
 
+        // Check if user is blocked
+        if (userService.isBlocked(user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Your account has been blocked by admin. Please contact admin."));
+        }
+
         if (!userService.isApproved(user)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "User approval is still pending"));
         }
 
-        // Construct response DTO without token
+        // Construct response DTO and issue JWT
         String avatarUrl = (user.getAvatar() != null && !user.getAvatar().isEmpty())
                 ? "/uploads/" + user.getAvatar()
                 : null;
@@ -52,9 +61,21 @@ public class AuthController {
                 user.getClassroom() != null ? user.getClassroom().getName() : null,
                 user.getClassroom() != null ? user.getClassroom().getId() : null,
                 null,
-                avatarUrl
+                avatarUrl,
+                user.getTeacherType()
         );
 
-        return ResponseEntity.ok(Map.of("user", responseDTO));
+        // Build JWT claims
+        Map<String, Object> claims = Map.of(
+                "id", user.getId(),
+                "email", user.getEmail(),
+                "role", user.getRole() != null ? user.getRole().getName() : null
+        );
+        String token = jwtUtil.generateToken(claims);
+
+        return ResponseEntity.ok(Map.of(
+                "token", token,
+                "user", responseDTO
+        ));
     }
 }

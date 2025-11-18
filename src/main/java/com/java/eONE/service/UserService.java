@@ -1,5 +1,7 @@
 package com.java.eONE.service;
 
+import com.java.eONE.enums.UserStatus;
+import com.java.eONE.enums.RoleType;
 import com.java.eONE.model.User;
 import com.java.eONE.repository.AssignmentRepository;
 import com.java.eONE.repository.ClassroomRepository;
@@ -57,8 +59,13 @@ public class UserService {
     }
 
     public boolean isApproved(User user) {
-        // Assuming status 1 = approved, based on your ROR enum
-        return user.getStatus() != null && user.getStatus() == 1;
+        if (user.getStatus() == null) return false;
+        return user.getStatus() == UserStatus.APPROVED.getValue();
+    }
+
+    public boolean isBlocked(User user) {
+        if (user.getStatus() == null) return false;
+        return user.getStatus() == UserStatus.BLOCKED.getValue();
     }
     
     @Transactional
@@ -70,55 +77,57 @@ public class UserService {
             user.setPasswordDigest(encodedPassword);
         }
 
-        user.setStatus(0); // pending approval
+        user.setStatus(UserStatus.PENDING.getValue()); // pending approval
         User savedUser = userRepository.save(user);
         return toDTO(savedUser, null);
     }
 
     public List<UserResponseDTO> getPendingApprovals(String type, Long teacherId) {
-        // Handle case sensitivity - convert to proper case
-        String roleName = type.toLowerCase();
-        if ("teacher".equals(roleName)) {
-            roleName = "Teacher";
-        } else if ("student".equals(roleName)) {
-            roleName = "Student";
+        // Use RoleType enum to get role name
+        RoleType roleType;
+        try {
+            roleType = RoleType.fromDisplayName(type);
+        } catch (IllegalArgumentException e) {
+            return List.of();
         }
         
-        Role role = roleRepository.findByName(roleName);
+        Role role = roleRepository.findByName(roleType.getCode());
         if (role == null) return List.of();
 
+        int pendingStatus = UserStatus.PENDING.getValue();
         if ("student".equalsIgnoreCase(type) && teacherId != null) {
             User teacher = userRepository.findById(teacherId).orElse(null);
             if (teacher == null) return List.of();
 
-            return userRepository.findByRoleClassroomStatusExcludingAdmin(role.getId(), teacher.getClassroom().getId(), 0)
+            return userRepository.findByRoleClassroomStatusExcludingAdmin(role.getId(), teacher.getClassroom().getId(), pendingStatus)
                     .stream().map(u -> toDTO(u, null)).collect(Collectors.toList());
         } else {
-            return userRepository.findByRoleAndStatusExcludingAdmin(role.getId(), 0)
+            return userRepository.findByRoleAndStatusExcludingAdmin(role.getId(), pendingStatus)
                     .stream().map(u -> toDTO(u, null)).collect(Collectors.toList());
         }
     }
 
     public List<UserResponseDTO> getApprovedUsers(String type, Long teacherId) {
-        // Handle case sensitivity - convert to proper case
-        String roleName = type.toLowerCase();
-        if ("teacher".equals(roleName)) {
-            roleName = "Teacher";
-        } else if ("student".equals(roleName)) {
-            roleName = "Student";
+        // Use RoleType enum to get role name
+        RoleType roleType;
+        try {
+            roleType = RoleType.fromDisplayName(type);
+        } catch (IllegalArgumentException e) {
+            return List.of();
         }
         
-        Role role = roleRepository.findByName(roleName);
+        Role role = roleRepository.findByName(roleType.getCode());
         if (role == null) return List.of();
 
+        int approvedStatus = UserStatus.APPROVED.getValue();
         if ("teacher".equalsIgnoreCase(type) && teacherId != null) {
             User teacher = userRepository.findById(teacherId).orElse(null);
             if (teacher == null) return List.of();
 
-            return userRepository.findByRoleClassroomStatusExcludingAdmin(role.getId(), teacher.getClassroom().getId(), 1)
+            return userRepository.findByRoleClassroomStatusExcludingAdmin(role.getId(), teacher.getClassroom().getId(), approvedStatus)
                     .stream().map(u -> toDTO(u, null)).collect(Collectors.toList());
         } else {
-            return userRepository.findByRoleAndStatusExcludingAdmin(role.getId(), 1)
+            return userRepository.findByRoleAndStatusExcludingAdmin(role.getId(), approvedStatus)
                     .stream().map(u -> toDTO(u, null)).collect(Collectors.toList());
         }
     }
@@ -128,7 +137,7 @@ public class UserService {
         User user = userRepository.findById(userId).orElse(null);
         if (user == null) return false;
 
-        user.setStatus(1); // approved
+        user.setStatus(UserStatus.APPROVED.getValue()); // approved
         userRepository.save(user);
         mailService.sendApprovalEmail(user);
         return true;
@@ -139,7 +148,7 @@ public class UserService {
         User user = userRepository.findById(userId).orElse(null);
         if (user == null) return false;
 
-        user.setStatus(2); // rejected
+        user.setStatus(UserStatus.REJECTED.getValue()); // rejected
         userRepository.save(user);
         mailService.sendRejectionEmail(user);
         return true;
@@ -150,9 +159,9 @@ public class UserService {
     }
 
     public long getPendingApprovalsCount() {
-        List<Long> roleIds = roleRepository.findByNameIn(List.of("Teacher", "Company"))
+        List<Long> roleIds = roleRepository.findByNameIn(List.of(RoleType.TEACHER.getCode(), "Company"))
                 .stream().map(Role::getId).collect(Collectors.toList());
-        return userRepository.countByStatusAndRoleIdIn(0, roleIds);
+        return userRepository.countByStatusAndRoleIdIn(UserStatus.PENDING.getValue(), roleIds);
     }
 
     public long getClassroomCount() {
@@ -179,7 +188,8 @@ public class UserService {
                 user.getClassroom() != null ? user.getClassroom().getName() : null,
                 user.getClassroom() != null ? user.getClassroom().getId() : null,
                 token,
-                avatarUrl
+                avatarUrl,
+                user.getTeacherType()
         );
     }
 
@@ -227,13 +237,13 @@ public class UserService {
         long subjectCount = subjectRepository.countByTeacherId(teacherId);
 
         // 2. Approved students in teacher's classrooms
-        long studentCount = userRepository.countStudentsByTeacherIdAndStatus(teacherId, 1);
+        long studentCount = userRepository.countStudentsByTeacherIdAndStatus(teacherId, UserStatus.APPROVED.getValue());
 
         // 3. Assignments by teacher
         long assignmentCount = assignmentRepository.countByTeacherId(teacherId);
 
         // 4. Pending approvals
-        long pendingApprovalCount = userRepository.countStudentsByTeacherIdAndStatus(teacherId, 0);
+        long pendingApprovalCount = userRepository.countStudentsByTeacherIdAndStatus(teacherId, UserStatus.PENDING.getValue());
 
         dto.setSubjectCount(subjectCount);
         dto.setStudentCount(studentCount);
@@ -244,11 +254,72 @@ public class UserService {
     }
 
     @Transactional
-    public boolean deleteUserById(Long id) {
-        if (userRepository.existsById(id)) {
-            userRepository.deleteById(id);
-            return true;
+    public boolean blockUser(Long userId) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) return false;
+        
+        user.setStatus(UserStatus.BLOCKED.getValue()); // blocked
+        userRepository.save(user);
+        return true;
+    }
+
+    @Transactional
+    public boolean unblockUser(Long userId) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) return false;
+        
+        user.setStatus(UserStatus.APPROVED.getValue()); // approved (unblock)
+        userRepository.save(user);
+        return true;
+    }
+
+    public boolean canDeleteTeacher(Long teacherId) {
+        // Check if teacher has created any subjects
+        long subjectCount = subjectRepository.countByTeacherId(teacherId);
+        if (subjectCount > 0) {
+            return false;
         }
-        return false;
+        
+        // Check if teacher has created any assignments
+        long assignmentCount = assignmentRepository.countByTeacherId(teacherId);
+        if (assignmentCount > 0) {
+            return false;
+        }
+        
+        return true;
+    }
+
+    @Transactional
+    public boolean deleteUserById(Long id) {
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null) {
+            return false;
+        }
+        
+        // If user is a teacher, check if they have created subjects or assignments
+        if (user.getRole() != null && RoleType.TEACHER.getCode().equals(user.getRole().getName())) {
+            // If teacher has subjects or assignments, they must be blocked first
+            if (!canDeleteTeacher(id)) {
+                // Only allow deletion if user is blocked
+                if (user.getStatus() == null || user.getStatus() != UserStatus.BLOCKED.getValue()) {
+                    return false; // Cannot delete teacher with subjects/assignments unless blocked
+                }
+            }
+            
+            // If teacher is blocked and has subjects/assignments, delete them first
+            if (user.getStatus() != null && user.getStatus() == UserStatus.BLOCKED.getValue()) {
+                // Delete all subjects created by this teacher
+                List<com.java.eONE.model.Subject> subjects = subjectRepository.findByTeacherId(id);
+                subjectRepository.deleteAll(subjects);
+                
+                // Delete all assignments created by this teacher
+                List<com.java.eONE.model.Assignment> assignments = assignmentRepository.findByTeacherId(id);
+                assignmentRepository.deleteAll(assignments);
+            }
+        }
+        
+        // Delete the user
+        userRepository.deleteById(id);
+        return true;
     }
 }
